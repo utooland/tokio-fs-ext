@@ -7,4 +7,30 @@ description = "Extend tokio fs to be compatible with native and wasm"
 license = "MIT"
 repository = "https://github.com/xusd320/tokio-fs-ext.git"
 
+
 [dependencies]
+
+
+[target.'cfg(not(all(target_family = "wasm", target_os = "unknown")))'.dependencies]
+tokio = { version = "1.46.1", default-features = false, features = ["fs"] }
+
+[target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dependencies]
+web-sys = { version = "0.3.77", features = [
+  "FileSystemCreateWritableOptions",
+  "FileSystemDirectoryHandle",
+  "FileSystemFileHandle",
+  "FileSystemFlags",
+  "FileSystemGetDirectoryOptions",
+  "FileSystemGetFileOptions",
+  "FileSystemHandle",
+  "FileSystemHandleKind",
+  "FileSystemHandlePermissionDescriptor",
+  "FileSystemPermissionDescriptor",
+  "FileSystemPermissionMode",
+  "FileSystemReadWriteOptions",
+  "FileSystemRemoveOptions",
+  "FileSystemSyncAccessHandle",
+  "FileSystemWritableFileStream",
+] }
+wasm-bindgen = { version = "0.2.100", default-features = false }
+tokio = { version = "1.46.1", default-features = false, features = ["sync"] }
