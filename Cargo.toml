@@ -3,7 +3,7 @@ name = "tokio-fs-ext"
 version = "0.0.1"
 edition = "2024"
 authors = ["xusd320"]
-description = "Tokio fs compatible with native and wasm"
+description = "Extend tokio fs to be compatible with native and wasm"
 license = "MIT"
 repository = "https://github.com/xusd320/tokio-fs-ext.git"
 
