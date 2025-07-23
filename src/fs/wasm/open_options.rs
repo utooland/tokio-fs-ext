@@ -1,6 +1,6 @@
 use std::{io, path::Path};
 
-use crate::fs::File;
+use crate::fs::{File, wasm::file::open_file};
 
 pub(super) const READ: u8 = 0b0000_0001;
 pub(super) const WRITE: u8 = 0b0000_0010;
@@ -72,12 +72,8 @@ impl OpenOptions {
     }
 
     pub async fn open(&self, path: impl AsRef<Path>) -> io::Result<File> {
-        File::open_with_options(path, self).await
-    }
-}
-
-impl OpenOptions {
-    pub(super) fn readwrite(&self) -> bool {
-        self.0 & WRITE > 0
+        let create = self.0 & CREATE > 0;
+        let truncate = self.0 & TRUNCATE > 0;
+        open_file(path, create, truncate).await
     }
 }

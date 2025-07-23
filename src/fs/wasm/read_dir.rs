@@ -34,7 +34,7 @@ pub async fn read_dir(path: impl AsRef<Path>) -> io::Result<ReadDir> {
 #[must_use = "streams do nothing unless polled"]
 pub struct ReadDir {
     path: PathBuf,
-    stream: JsStream,
+    pub(super) stream: JsStream,
 }
 
 impl ReadDir {
