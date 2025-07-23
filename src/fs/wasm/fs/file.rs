@@ -2,12 +2,19 @@ use std::{fmt, fs::Metadata, io, path::Path};
 
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::fs::OpenOptions;
+use crate::fs::fs::OpenOptions;
 
 pub struct File {
     max_buf_size: usize,
     // todo
     opfs: (),
+}
+
+#[derive(Debug)]
+enum Operation {
+    Read(io::Result<usize>),
+    Write(io::Result<()>),
+    Seek(io::Result<u64>),
 }
 
 impl File {

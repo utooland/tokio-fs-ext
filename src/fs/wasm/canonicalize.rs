@@ -3,6 +3,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use path_absolutize::Absolutize;
+
 pub async fn canonicalize(path: impl AsRef<Path>) -> io::Result<PathBuf> {
-    todo!()
+    path.as_ref().absolutize().map(Into::into)
 }

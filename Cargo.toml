@@ -15,22 +15,28 @@ repository = "https://github.com/xusd320/tokio-fs-ext.git"
 tokio = { version = "1.46.1", default-features = false, features = ["fs"] }
 
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dependencies]
+js-sys = "0.3.77"
 web-sys = { version = "0.3.77", features = [
-  "FileSystemCreateWritableOptions",
+  "DomException",
   "FileSystemDirectoryHandle",
   "FileSystemFileHandle",
-  "FileSystemFlags",
-  "FileSystemGetDirectoryOptions",
   "FileSystemGetFileOptions",
-  "FileSystemHandle",
-  "FileSystemHandleKind",
-  "FileSystemHandlePermissionDescriptor",
-  "FileSystemPermissionDescriptor",
-  "FileSystemPermissionMode",
-  "FileSystemReadWriteOptions",
+  "FileSystemGetDirectoryOptions",
   "FileSystemRemoveOptions",
   "FileSystemSyncAccessHandle",
   "FileSystemWritableFileStream",
+  "Navigator",
+  "StorageManager",
+  "Window",
+
 ] }
 wasm-bindgen = { version = "0.2.100", default-features = false }
+wasm-bindgen-futures = { version = "0.4.50", features = [
+  "futures-core-03-stream",
+] }
 tokio = { version = "1.46.1", default-features = false, features = ["sync"] }
+send_wrapper = "0.6.0"
+path-absolutize = { version = "3.1.1", features = ["use_unix_paths_on_wasm"] }
+
+[target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dev-dependencies]
+wasm-bindgen-test = "0.3.50"
