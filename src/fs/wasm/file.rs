@@ -9,18 +9,19 @@ use crate::fs::{
     OpenOptions,
     wasm::{
         open_options::TRUNCATE,
-        opfs::{fs_root, opfs_error_to_std_error},
+        opfs::{fs_root, map_opfs_err},
     },
 };
 
 #[derive(Debug)]
 pub struct File {
-    file_handle: FileSystemFileHandle,
-    sync_access_handle: FileSystemSyncAccessHandle,
+    #[allow(dead_code)]
+    pub(super) file_handle: FileSystemFileHandle,
+    pub(super) sync_access_handle: FileSystemSyncAccessHandle,
 }
 
 impl File {
-    pub(crate) async fn open_with_options(
+    pub(super) async fn open_with_options(
         path: impl AsRef<Path>,
         open_options: &OpenOptions,
     ) -> io::Result<File> {
@@ -30,20 +31,21 @@ impl File {
         option.set_create(open_options.readwrite());
         let file_handle = JsFuture::from(root.get_file_handle_with_options(&name, &option))
             .await
-            .map_err(opfs_error_to_std_error)?
+            .map_err(map_opfs_err)?
             .dyn_into::<FileSystemFileHandle>()
-            .map_err(opfs_error_to_std_error)?;
+            .map_err(map_opfs_err)?;
         let sync_access_handle = JsFuture::from(file_handle.create_sync_access_handle())
             .await
-            .map_err(opfs_error_to_std_error)?
+            .map_err(map_opfs_err)?
             .dyn_into::<FileSystemSyncAccessHandle>()
-            .map_err(opfs_error_to_std_error)?;
+            .map_err(map_opfs_err)?;
 
         if open_options.0 & TRUNCATE > 0 {
             sync_access_handle
                 .truncate_with_u32(0)
-                .map_err(opfs_error_to_std_error)?;
+                .map_err(map_opfs_err)?;
         }
+
         Ok(File {
             file_handle,
             sync_access_handle,
@@ -80,7 +82,7 @@ impl Drop for File {
     fn drop(&mut self) {
         self.sync_access_handle
             .flush()
-            .expect("Failed to fluse opfs sync access handle");
+            .expect("Failed to flush opfs sync access handle");
         self.sync_access_handle.close();
     }
 }

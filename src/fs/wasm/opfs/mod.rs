@@ -15,24 +15,22 @@ pub async fn fs_root() -> Result<FileSystemDirectoryHandle> {
             Result::Ok(SendWrapper::new(
                 JsFuture::from(window().unwrap().navigator().storage().get_directory())
                     .await
-                    .map_err(opfs_error_to_std_error)?
+                    .map_err(map_opfs_err)?
                     .dyn_into::<FileSystemDirectoryHandle>()
-                    .map_err(opfs_error_to_std_error)?,
+                    .map_err(map_opfs_err)?,
             ))
         })
         .await?;
     Ok(root.clone().take())
 }
 
-pub fn opfs_error_to_std_error(v: JsValue) -> Error {
-    match v.clone().dyn_into::<DomException>() {
+pub fn map_opfs_err(js_err: JsValue) -> Error {
+    match js_err.clone().dyn_into::<DomException>() {
         Ok(e) => match e.name().as_str() {
             "NotFoundError" => Error::from(ErrorKind::NotFound),
-            "NotAllowedError" | "NoModificationAllowedError" => {
-                Error::from(ErrorKind::PermissionDenied)
-            }
+            "NotAllowedError" => Error::from(ErrorKind::PermissionDenied),
             msg => Error::other(msg),
         },
-        Err(_) => Error::other(format!("{}", Object::from(v).to_string())),
+        Err(_) => Error::other(format!("{}", Object::from(js_err).to_string())),
     }
 }

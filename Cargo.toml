@@ -22,6 +22,7 @@ web-sys = { version = "0.3.77", features = [
   "FileSystemFileHandle",
   "FileSystemGetFileOptions",
   "FileSystemGetDirectoryOptions",
+  "FileSystemHandlePermissionDescriptor",
   "FileSystemRemoveOptions",
   "FileSystemSyncAccessHandle",
   "FileSystemWritableFileStream",
@@ -36,6 +37,7 @@ wasm-bindgen-futures = { version = "0.4.50", features = [
 ] }
 tokio = { version = "1.46.1", default-features = false, features = ["sync"] }
 send_wrapper = "0.6.0"
+futures = "0.3.31"
 path-absolutize = { version = "3.1.1", features = ["use_unix_paths_on_wasm"] }
 
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dev-dependencies]
