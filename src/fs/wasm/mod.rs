@@ -1,4 +1,3 @@
-pub(crate) mod buf;
 pub(crate) mod canonicalize;
 pub(crate) mod copy;
 pub(crate) mod create_dir;
