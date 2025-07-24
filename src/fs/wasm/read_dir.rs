@@ -13,7 +13,7 @@ use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::{JsFuture, stream::JsStream};
 use web_sys::{FileSystemDirectoryHandle, FileSystemGetDirectoryOptions};
 
-use crate::fs::wasm::opfs::{fs_root, map_opfs_err};
+use crate::fs::opfs::{OpfsError, fs_root};
 
 pub async fn read_dir(path: impl AsRef<Path>) -> io::Result<ReadDir> {
     let name = path.as_ref().to_string_lossy();
@@ -22,9 +22,9 @@ pub async fn read_dir(path: impl AsRef<Path>) -> io::Result<ReadDir> {
     options.set_create(false);
     let directory_handle = JsFuture::from(root.get_directory_handle_with_options(&name, &options))
         .await
-        .map_err(map_opfs_err)?
+        .map_err(|err| io::Error::from(OpfsError::from(err)))?
         .dyn_into::<FileSystemDirectoryHandle>()
-        .map_err(map_opfs_err)?;
+        .map_err(|err| io::Error::from(OpfsError::from(err)))?;
     Ok(ReadDir {
         path: path.as_ref().into(),
         stream: JsStream::from(directory_handle.entries()),
@@ -61,7 +61,7 @@ impl ReadDir {
         entry: Result<JsValue, JsValue>,
     ) -> Result<Option<DirEntry>, io::Error> {
         entry.map_or_else(
-            |e| io::Result::Err(map_opfs_err(e)),
+            |err| io::Result::Err(io::Error::from(OpfsError::from(err))),
             |entry| {
                 let js_array = Array::from(&entry);
                 let name = OsString::from_str(
@@ -73,7 +73,7 @@ impl ReadDir {
                 .map_err(|_| io::Error::from(io::ErrorKind::InvalidFilename))?;
 
                 let kind = Reflect::get(&js_array.get(1), &JsValue::from(JsString::from("kind")))
-                    .map_err(map_opfs_err)?;
+                    .map_err(|err| io::Error::from(OpfsError::from(err)))?;
                 let file_type = if let Some(kind) = kind.as_string()
                     && kind == "directory"
                 {

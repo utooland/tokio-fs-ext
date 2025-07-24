@@ -5,7 +5,7 @@ pub(super) mod create_dir_all;
 pub(super) mod file;
 pub(super) mod metadata;
 pub(super) mod open_options;
-pub(super) mod opfs;
+pub(crate) mod opfs;
 pub(super) mod read;
 pub(super) mod read_dir;
 pub(super) mod read_link;

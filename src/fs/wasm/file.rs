@@ -7,7 +7,7 @@ use web_sys::{FileSystemFileHandle, FileSystemGetFileOptions, FileSystemSyncAcce
 
 use crate::fs::{
     OpenOptions,
-    wasm::opfs::{fs_root, map_opfs_err},
+    wasm::opfs::{OpfsError, fs_root},
 };
 
 #[derive(Debug)]
@@ -28,19 +28,19 @@ pub(super) async fn open_file(
     option.set_create(create);
     let file_handle = JsFuture::from(root.get_file_handle_with_options(&name, &option))
         .await
-        .map_err(map_opfs_err)?
+        .map_err(|err| io::Error::from(OpfsError::from(err)))?
         .dyn_into::<FileSystemFileHandle>()
-        .map_err(map_opfs_err)?;
+        .map_err(|err| io::Error::from(OpfsError::from(err)))?;
     let sync_access_handle = JsFuture::from(file_handle.create_sync_access_handle())
         .await
-        .map_err(map_opfs_err)?
+        .map_err(|err| io::Error::from(OpfsError::from(err)))?
         .dyn_into::<FileSystemSyncAccessHandle>()
-        .map_err(map_opfs_err)?;
+        .map_err(|err| io::Error::from(OpfsError::from(err)))?;
 
     if truncate {
         sync_access_handle
             .truncate_with_u32(0)
-            .map_err(map_opfs_err)?;
+            .map_err(|err| io::Error::from(OpfsError::from(err)))?;
     }
 
     Ok(File {

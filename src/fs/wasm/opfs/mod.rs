@@ -1,4 +1,4 @@
-use std::io::{Error, ErrorKind, Result};
+use std::io;
 
 use js_sys::Object;
 use send_wrapper::SendWrapper;
@@ -9,28 +9,40 @@ use web_sys::{DomException, FileSystemDirectoryHandle, window};
 
 static FS_ROOT: OnceCell<SendWrapper<FileSystemDirectoryHandle>> = OnceCell::const_new();
 
-pub async fn fs_root() -> Result<FileSystemDirectoryHandle> {
+pub async fn fs_root() -> io::Result<FileSystemDirectoryHandle> {
     let root = FS_ROOT
         .get_or_try_init(|| async {
-            Result::Ok(SendWrapper::new(
+            io::Result::Ok(SendWrapper::new(
                 JsFuture::from(window().unwrap().navigator().storage().get_directory())
                     .await
-                    .map_err(map_opfs_err)?
+                    .map_err(|err| io::Error::from(OpfsError::from(err)))?
                     .dyn_into::<FileSystemDirectoryHandle>()
-                    .map_err(map_opfs_err)?,
+                    .map_err(|err| io::Error::from(OpfsError::from(err)))?,
             ))
         })
         .await?;
     Ok(root.clone().take())
 }
 
-pub fn map_opfs_err(js_err: JsValue) -> Error {
-    match js_err.clone().dyn_into::<DomException>() {
-        Ok(e) => match e.name().as_str() {
-            "NotFoundError" => Error::from(ErrorKind::NotFound),
-            "NotAllowedError" => Error::from(ErrorKind::PermissionDenied),
-            msg => Error::other(msg),
-        },
-        Err(_) => Error::other(format!("{}", Object::from(js_err).to_string())),
+pub struct OpfsError {
+    js_err: JsValue,
+}
+
+impl From<JsValue> for OpfsError {
+    fn from(js_err: JsValue) -> Self {
+        Self { js_err }
+    }
+}
+
+impl From<OpfsError> for io::Error {
+    fn from(opfs_err: OpfsError) -> Self {
+        match opfs_err.js_err.clone().dyn_into::<DomException>() {
+            Ok(e) => match e.name().as_str() {
+                "NotFoundError" => io::Error::from(io::ErrorKind::NotFound),
+                "NotAllowedError" => io::Error::from(io::ErrorKind::PermissionDenied),
+                msg => io::Error::other(msg),
+            },
+            Err(_) => io::Error::other(format!("{}", Object::from(opfs_err.js_err).to_string())),
+        }
     }
 }
