@@ -8,6 +8,9 @@ license = "MIT"
 repository = "https://github.com/xusd320/tokio-fs-ext.git"
 
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 
 
