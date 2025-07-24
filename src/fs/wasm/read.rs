@@ -1,6 +1,6 @@
 use std::{io, path::Path};
 
-use crate::fs::{OpenOptions, wasm::opfs::OpfsError};
+use crate::fs::{OpenOptions, opfs::OpfsError};
 
 pub async fn read(path: impl AsRef<Path>) -> io::Result<Vec<u8>> {
     let file = OpenOptions::new().read(true).open(path).await?;

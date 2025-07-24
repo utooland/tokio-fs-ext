@@ -40,6 +40,7 @@ impl From<OpfsError> for io::Error {
             Ok(e) => match e.name().as_str() {
                 "NotFoundError" => io::Error::from(io::ErrorKind::NotFound),
                 "NotAllowedError" => io::Error::from(io::ErrorKind::PermissionDenied),
+                "TypeMismatchError" => io::Error::other("type mismatch"),
                 msg => io::Error::other(msg),
             },
             Err(_) => io::Error::other(format!("{}", Object::from(opfs_err.js_err).to_string())),

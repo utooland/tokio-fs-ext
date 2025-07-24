@@ -1,6 +1,8 @@
 cfg_select! {
     all(target_family = "wasm", target_os = "unknown") => {
         mod wasm;
+        pub(crate) use wasm::buf;
+        pub(crate) use wasm::file;
         pub(crate) use wasm::opfs;
         pub use wasm::{
             canonicalize::canonicalize,

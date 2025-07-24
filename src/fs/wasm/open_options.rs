@@ -1,6 +1,6 @@
 use std::{io, path::Path};
 
-use crate::fs::{File, wasm::file::open_file};
+use crate::fs::{File, file::open_file};
 
 pub(super) const READ: u8 = 0b0000_0001;
 pub(super) const WRITE: u8 = 0b0000_0010;
