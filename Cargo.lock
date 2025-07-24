@@ -348,6 +348,7 @@ dependencies = [
 name = "tokio-fs-ext"
 version = "0.0.1"
 dependencies = [
+ "bitflags",
  "futures",
  "js-sys",
  "path-absolutize",

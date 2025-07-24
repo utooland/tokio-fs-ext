@@ -1,16 +1,22 @@
+use bitflags::bitflags;
 use std::{io, path::Path};
 
 use crate::fs::{File, file::open_file};
 
-pub(super) const READ: u8 = 0b0000_0001;
-pub(super) const WRITE: u8 = 0b0000_0010;
-pub(super) const CREATE: u8 = 0b0000_0100;
-pub(super) const CREATE_NEW: u8 = 0b0000_1000;
-pub(super) const TRUNCATE: u8 = 0b0001_0000;
-pub(super) const APPEND: u8 = 0b0010_0000;
+bitflags! {
+    #[derive(Clone, Default, Debug, Copy)]
+    struct Flags: u8 {
+        const READ = 0b0000_0001;
+        const WRITE= 0b0000_0010;
+        const APPEND = 0b0000_0100;
+        const CREATE = 0b0000_1000;
+        const TRUNCATE = 0b0001_0000;
+        const CREATE_NEW = 0b0010_0000;
+    }
+}
 
-#[derive(Clone, Default, Debug)]
-pub struct OpenOptions(pub(super) u8);
+#[derive(Clone, Default, Debug, Copy)]
+pub struct OpenOptions(Flags);
 
 impl OpenOptions {
     pub fn new() -> OpenOptions {
@@ -19,61 +25,64 @@ impl OpenOptions {
 
     pub fn read(&mut self, read: bool) -> &mut OpenOptions {
         if read {
-            self.0 |= READ;
+            self.0 |= Flags::READ;
         } else {
-            self.0 = READ >> 1
+            self.0.remove(Flags::READ);
         }
         self
     }
 
     pub fn write(&mut self, write: bool) -> &mut OpenOptions {
         if write {
-            self.0 |= WRITE;
-        } else if self.0 >= WRITE {
-            self.0 = WRITE >> 1;
+            self.0 |= Flags::WRITE;
+        } else {
+            self.0.remove(Flags::WRITE)
         }
         self
     }
 
     pub fn append(&mut self, append: bool) -> &mut OpenOptions {
         if append {
-            self.0 |= APPEND;
-        } else if self.0 >= APPEND {
-            self.0 = APPEND >> 1;
+            self.0 |= Flags::APPEND;
+        } else {
+            self.0.remove(Flags::APPEND)
         }
         self
     }
 
     pub fn truncate(&mut self, truncate: bool) -> &mut OpenOptions {
         if truncate {
-            self.0 |= TRUNCATE;
-        } else if self.0 >= TRUNCATE {
-            self.0 = TRUNCATE >> 1;
+            self.0 |= Flags::TRUNCATE;
+        } else {
+            self.0.remove(Flags::TRUNCATE);
         }
         self
     }
 
     pub fn create(&mut self, create: bool) -> &mut OpenOptions {
         if create {
-            self.0 |= CREATE;
-        } else if self.0 >= CREATE {
-            self.0 = CREATE >> 1;
+            self.0 |= Flags::CREATE;
+        } else {
+            self.0.remove(Flags::CREATE);
         }
         self
     }
 
     pub fn create_new(&mut self, create_new: bool) -> &mut OpenOptions {
         if create_new {
-            self.0 |= CREATE_NEW;
-        } else if self.0 >= CREATE_NEW {
-            self.0 = CREATE_NEW >> 1;
+            self.0 |= Flags::CREATE_NEW;
+        } else {
+            self.0.remove(Flags::CREATE_NEW);
         }
         self
     }
 
     pub async fn open(&self, path: impl AsRef<Path>) -> io::Result<File> {
-        let create = self.0 & CREATE > 0;
-        let truncate = self.0 & TRUNCATE > 0;
-        open_file(path, create, truncate).await
+        open_file(
+            path,
+            self.0.contains(Flags::CREATE) && !self.0.contains(Flags::CREATE_NEW),
+            self.0.intersects(Flags::TRUNCATE),
+        )
+        .await
     }
 }

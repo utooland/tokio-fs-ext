@@ -5,7 +5,7 @@ use send_wrapper::SendWrapper;
 use tokio::sync::OnceCell;
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{DomException, FileSystemDirectoryHandle, window};
+use web_sys::{DedicatedWorkerGlobalScope, DomException, FileSystemDirectoryHandle};
 
 static FS_ROOT: OnceCell<SendWrapper<FileSystemDirectoryHandle>> = OnceCell::const_new();
 
@@ -13,14 +13,20 @@ pub async fn fs_root() -> io::Result<FileSystemDirectoryHandle> {
     let root = FS_ROOT
         .get_or_try_init(|| async {
             io::Result::Ok(SendWrapper::new(
-                JsFuture::from(window().unwrap().navigator().storage().get_directory())
-                    .await
-                    .map_err(|err| io::Error::from(OpfsError::from(err)))?
-                    .dyn_into::<FileSystemDirectoryHandle>()
-                    .map_err(|err| io::Error::from(OpfsError::from(err)))?,
+                JsFuture::from(
+                    DedicatedWorkerGlobalScope::from(JsValue::from(js_sys::global()))
+                        .navigator()
+                        .storage()
+                        .get_directory(),
+                )
+                .await
+                .map_err(|err| io::Error::from(OpfsError::from(err)))?
+                .dyn_into::<FileSystemDirectoryHandle>()
+                .map_err(|err| io::Error::from(OpfsError::from(err)))?,
             ))
         })
         .await?;
+
     Ok(root.clone().take())
 }
 

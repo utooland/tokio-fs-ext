@@ -61,7 +61,7 @@ impl Drop for File {
 pub(super) async fn open_file(
     path: impl AsRef<Path>,
     create: bool,
-    truncate: bool,
+    truncate_all: bool,
 ) -> io::Result<File> {
     let name = path.as_ref().to_string_lossy();
     let root = fs_root().await?;
@@ -78,7 +78,7 @@ pub(super) async fn open_file(
         .dyn_into::<FileSystemSyncAccessHandle>()
         .map_err(|err| io::Error::from(OpfsError::from(err)))?;
 
-    if truncate {
+    if truncate_all {
         sync_access_handle
             .truncate_with_u32(0)
             .map_err(|err| io::Error::from(OpfsError::from(err)))?;

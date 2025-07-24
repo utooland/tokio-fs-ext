@@ -17,6 +17,7 @@ tokio = { version = "1.46.1", default-features = false, features = ["fs"] }
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dependencies]
 js-sys = "0.3.77"
 web-sys = { version = "0.3.77", features = [
+  "DedicatedWorkerGlobalScope",
   "DomException",
   "FileSystemDirectoryHandle",
   "FileSystemFileHandle",
@@ -29,8 +30,8 @@ web-sys = { version = "0.3.77", features = [
   "FileSystemWritableFileStream",
   "Navigator",
   "StorageManager",
-  "Window",
-
+  "WorkerNavigator",
+  "console",
 ] }
 wasm-bindgen = { version = "0.2.100", default-features = false }
 wasm-bindgen-futures = { version = "0.4.50", features = [
@@ -40,6 +41,10 @@ tokio = { version = "1.46.1", default-features = false, features = ["sync"] }
 send_wrapper = "0.6.0"
 futures = "0.3.31"
 path-absolutize = { version = "3.1.1", features = ["use_unix_paths_on_wasm"] }
+bitflags = "2.9.1"
 
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dev-dependencies]
 wasm-bindgen-test = "0.3.50"
+
+[package.metadata.wasm-pack.profile.dev.wasm-bindgen]
+dwarf-debug-info = true

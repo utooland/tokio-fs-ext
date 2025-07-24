@@ -10,7 +10,7 @@ pub async fn read(path: impl AsRef<Path>) -> io::Result<Vec<u8>> {
         .get_size()
         .map_err(|err| io::Error::from(OpfsError::from(err)))?;
 
-    let mut buf = Vec::with_capacity(file_size as usize);
+    let mut buf = vec![0; file_size as usize];
 
     file.sync_access_handle
         .read_with_u8_array(&mut buf)
