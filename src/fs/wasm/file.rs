@@ -3,7 +3,7 @@ use std::{
     cmp,
     collections::VecDeque,
     fs::Metadata,
-    io::{self, Read},
+    io::{self, Read, SeekFrom, Write},
     path::Path,
     pin::Pin,
     task::{Context, Poll, ready},
@@ -91,6 +91,21 @@ where
     QUEUE.with(|cell| cell.borrow_mut().push_back(task));
 
     JoinHandle { rx }
+}
+
+pub(super) fn spawn_mandatory_blocking<F, R>(f: F) -> Option<JoinHandle<R>>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    let (tx, rx) = oneshot::channel();
+    let task = Box::new(move || {
+        let _ = tx.send(f());
+    });
+
+    QUEUE.with(|cell| cell.borrow_mut().push_back(task));
+
+    Some(JoinHandle { rx })
 }
 
 impl File {
@@ -258,9 +273,89 @@ impl AsyncWrite for File {
     fn poll_write(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-        buf: &[u8],
+        src: &[u8],
     ) -> Poll<Result<usize, io::Error>> {
-        todo!()
+        let sync_access_handle = self.sync_access_handle.clone();
+        let me = self.get_mut();
+        let inner = me.inner.get_mut();
+        if let Some(e) = inner.last_write_err.take() {
+            return Poll::Ready(Err(e.into()));
+        }
+
+        loop {
+            match inner.state {
+                State::Idle(ref mut buf_cell) => {
+                    let mut buf = buf_cell.take().unwrap();
+
+                    let seek = if !buf.is_empty() {
+                        Some(SeekFrom::Current(buf.discard_read()))
+                    } else {
+                        None
+                    };
+
+                    let n = buf.copy_from(src, me.max_buf_size);
+
+                    struct OpfsFileWriter {
+                        options: SendWrapper<FileSystemReadWriteOptions>,
+                        sync_access_handle: SendWrapper<FileSystemSyncAccessHandle>,
+                    }
+                    impl Write for OpfsFileWriter {
+                        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+                            self.sync_access_handle
+                                .write_with_u8_array_and_options(buf, &self.options)
+                                .map_or_else(
+                                    |err| io::Result::Err(io::Error::from(OpfsError::from(err))),
+                                    |size| io::Result::Ok(size as usize),
+                                )
+                        }
+
+                        fn flush(&mut self) -> io::Result<()> {
+                            todo!()
+                        }
+                    }
+
+                    let options = FileSystemReadWriteOptions::new();
+                    options.set_at(inner.pos as f64);
+                    let mut opfs_file_writer = OpfsFileWriter {
+                        options: SendWrapper::new(options),
+                        sync_access_handle: SendWrapper::new(sync_access_handle.clone()),
+                    };
+
+                    let blocking_task_join_handle = spawn_mandatory_blocking(move || {
+                        let res = buf.write_to(&mut opfs_file_writer);
+                        (Operation::Write(res), buf)
+                    })
+                    .ok_or_else(|| io::Error::other("background task failed"))?;
+
+                    inner.state = State::Busy(blocking_task_join_handle);
+
+                    return Poll::Ready(Ok(n));
+                }
+                State::Busy(ref mut rx) => {
+                    let (op, buf) = ready!(Pin::new(rx).poll(cx))?;
+                    inner.state = State::Idle(Some(buf));
+
+                    match op {
+                        Operation::Read(_) => {
+                            // We don't care about the result here. The fact
+                            // that the cursor has advanced will be reflected in
+                            // the next iteration of the loop
+                            continue;
+                        }
+                        Operation::Write(res) => {
+                            // If the previous write was successful, continue.
+                            // Otherwise, error.
+                            res?;
+                            continue;
+                        }
+                        Operation::Seek(_) => {
+                            // Ignore the seek
+                            continue;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
