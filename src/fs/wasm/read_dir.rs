@@ -11,9 +11,12 @@ use futures::stream::StreamExt;
 use js_sys::{Array, JsString};
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::stream::JsStream;
-use web_sys::{FileSystemHandle, FileSystemHandleKind};
+use web_sys::FileSystemHandle;
 
-use crate::fs::opfs::{OpfsError, open_dir};
+use crate::fs::{
+    opfs::{OpfsError, open_dir},
+    wasm::metadata::FileType,
+};
 
 pub async fn read_dir(path: impl AsRef<Path>) -> io::Result<ReadDir> {
     let dir_handle = open_dir(&path, false, true).await?;
@@ -74,37 +77,6 @@ impl ReadDir {
             path: self.path.join(name.clone()),
             name,
         })
-    }
-}
-
-/// Symlink is not supported.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FileType {
-    File,
-    Directory,
-    // TODO:
-    Symlink,
-}
-
-impl FileType {
-    pub fn is_dir(&self) -> bool {
-        *self == Self::Directory
-    }
-    pub fn is_file(&self) -> bool {
-        *self == Self::File
-    }
-    pub fn is_symlink(&self) -> bool {
-        *self == Self::Symlink
-    }
-}
-
-impl From<FileSystemHandleKind> for FileType {
-    fn from(handle: FileSystemHandleKind) -> Self {
-        match handle {
-            FileSystemHandleKind::File => FileType::File,
-            FileSystemHandleKind::Directory => FileType::Directory,
-            _ => todo!(),
-        }
     }
 }
 

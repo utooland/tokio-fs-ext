@@ -29,10 +29,38 @@ async fn test_dir() {
     assert!(!try_exists("/1").await.unwrap());
 
     create_dir_all("/1/2/3").await.unwrap();
-
     assert!(try_exists("/1/2/3").await.unwrap());
 
-    assert!(!try_exists("/1/2/3/4").await.unwrap());
+    write("/1/2/f_0", "f_0").await.unwrap();
+    let mut rd = read_dir("1/2").await.unwrap();
+
+    let mut entries = vec![
+        {
+            let e = rd.next_entry().await.unwrap().unwrap();
+            (
+                e.file_type().is_dir(),
+                e.file_name().to_string_lossy().to_string(),
+            )
+        },
+        {
+            let e = rd.next_entry().await.unwrap().unwrap();
+            (
+                e.file_type().is_dir(),
+                e.file_name().to_string_lossy().to_string(),
+            )
+        },
+    ];
+
+    entries.sort_by_key(|e| e.0);
+
+    assert_eq!(
+        entries,
+        vec![(false, "f_0".to_string()), (true, "3".to_string())]
+    );
+
+    assert!(rd.next_entry().await.unwrap().is_none());
+
+    assert!(!try_exists("/1/2/3/x").await.unwrap());
 }
 
 #[wasm_bindgen_test]
