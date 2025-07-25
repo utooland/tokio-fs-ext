@@ -72,7 +72,7 @@ impl From<OpfsError> for io::Error {
 pub(super) async fn open_file(
     path: impl AsRef<Path>,
     create: bool,
-    truncate_all: bool,
+    truncate: bool,
 ) -> io::Result<File> {
     let virt = virtualize(&path)?;
 
@@ -88,7 +88,7 @@ pub(super) async fn open_file(
             if path.to_string_lossy().is_empty() {
                 fs_root().await?
             } else {
-                open_dir(path, false, true).await?
+                open_dir(path, false, false).await?
             }
         }
         None => fs_root().await?,
@@ -107,7 +107,7 @@ pub(super) async fn open_file(
         .dyn_into::<FileSystemSyncAccessHandle>()
         .map_err(|err| OpfsError::from(err).into_io_err())?;
 
-    if truncate_all {
+    if truncate {
         sync_access_handle
             .truncate_with_u32(0)
             .map_err(|err| OpfsError::from(err).into_io_err())?;
@@ -119,8 +119,12 @@ pub(super) async fn open_file(
 pub(crate) async fn open_dir(
     path: impl AsRef<Path>,
     create: bool,
-    recursive: bool,
+    create_recursive: bool,
 ) -> io::Result<FileSystemDirectoryHandle> {
+    if create_recursive && !create {
+        return Err(io::Error::from(io::ErrorKind::InvalidInput));
+    }
+
     let virt = virtualize(path)?;
 
     let components = virt
@@ -128,8 +132,12 @@ pub(crate) async fn open_dir(
         .map(|c| c.as_os_str().to_string_lossy())
         .collect::<Vec<_>>();
 
-    if components.is_empty() || (!recursive && components.len() > 1) {
+    if components.is_empty() {
         return Err(io::Error::from(io::ErrorKind::InvalidInput));
+    }
+
+    if create && !create_recursive && components.len() > 1 {
+        return Err(io::Error::from(io::ErrorKind::NotFound));
     }
 
     let options = FileSystemGetDirectoryOptions::new();
@@ -162,7 +170,7 @@ pub(crate) async fn open_dir(
     Ok(dir_handle)
 }
 
-pub(crate) async fn rm_dir(path: impl AsRef<Path>, recursive: bool) -> io::Result<()> {
+pub(crate) async fn rm(path: impl AsRef<Path>, recursive: bool) -> io::Result<()> {
     let virt = virtualize(path)?;
 
     let parent = virt.parent();
@@ -177,7 +185,7 @@ pub(crate) async fn rm_dir(path: impl AsRef<Path>, recursive: bool) -> io::Resul
             if path.to_string_lossy().is_empty() {
                 fs_root().await?
             } else {
-                open_dir(path, false, true).await?
+                open_dir(path, false, false).await?
             }
         }
         None => fs_root().await?,
