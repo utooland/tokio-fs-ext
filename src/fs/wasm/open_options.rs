@@ -1,7 +1,7 @@
 use bitflags::bitflags;
 use std::{io, path::Path};
 
-use crate::fs::{File, file::open_file};
+use crate::fs::{File, opfs::open_file};
 
 bitflags! {
     #[derive(Clone, Default, Debug, Copy)]

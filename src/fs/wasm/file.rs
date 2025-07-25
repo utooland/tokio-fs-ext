@@ -7,14 +7,9 @@ use std::{
 };
 
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-use wasm_bindgen::JsCast;
-use wasm_bindgen_futures::JsFuture;
-use web_sys::{FileSystemFileHandle, FileSystemGetFileOptions, FileSystemSyncAccessHandle};
+use web_sys::FileSystemSyncAccessHandle;
 
-use crate::fs::{
-    OpenOptions,
-    opfs::{OpfsError, fs_root},
-};
+use crate::fs::{OpenOptions, opfs::open_file};
 
 #[derive(Debug)]
 pub struct File {
@@ -34,7 +29,7 @@ impl File {
 
     pub async fn create_new<P: AsRef<Path>>(path: P) -> std::io::Result<File> {
         if (open_file(&path, true, false).await).is_ok() {
-            return io::Result::Err(io::Error::from(io::ErrorKind::AlreadyExists));
+            return Err(io::Error::from(io::ErrorKind::AlreadyExists));
         }
         File::create(path).await
     }
@@ -56,35 +51,6 @@ impl Drop for File {
             .expect("Failed to flush opfs sync access handle");
         self.sync_access_handle.close();
     }
-}
-
-pub(super) async fn open_file(
-    path: impl AsRef<Path>,
-    create: bool,
-    truncate_all: bool,
-) -> io::Result<File> {
-    let name = path.as_ref().to_string_lossy();
-    let root = fs_root().await?;
-    let option = FileSystemGetFileOptions::new();
-    option.set_create(create);
-    let file_handle = JsFuture::from(root.get_file_handle_with_options(&name, &option))
-        .await
-        .map_err(|err| OpfsError::from(err).into_io_err())?
-        .dyn_into::<FileSystemFileHandle>()
-        .map_err(|err| OpfsError::from(err).into_io_err())?;
-    let sync_access_handle = JsFuture::from(file_handle.create_sync_access_handle())
-        .await
-        .map_err(|err| OpfsError::from(err).into_io_err())?
-        .dyn_into::<FileSystemSyncAccessHandle>()
-        .map_err(|err| OpfsError::from(err).into_io_err())?;
-
-    if truncate_all {
-        sync_access_handle
-            .truncate_with_u32(0)
-            .map_err(|err| OpfsError::from(err).into_io_err())?;
-    }
-
-    Ok(File { sync_access_handle })
 }
 
 impl AsyncRead for File {

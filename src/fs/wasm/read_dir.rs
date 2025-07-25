@@ -8,23 +8,15 @@ use std::{
 };
 
 use futures::stream::StreamExt;
-use js_sys::{Array, JsString, Reflect};
+use js_sys::{Array, JsString};
 use wasm_bindgen::{JsCast, JsValue};
-use wasm_bindgen_futures::{JsFuture, stream::JsStream};
-use web_sys::{FileSystemDirectoryHandle, FileSystemGetDirectoryOptions};
+use wasm_bindgen_futures::stream::JsStream;
+use web_sys::{FileSystemHandle, FileSystemHandleKind};
 
-use crate::fs::opfs::{OpfsError, fs_root};
+use crate::fs::opfs::{OpfsError, open_dir};
 
 pub async fn read_dir(path: impl AsRef<Path>) -> io::Result<ReadDir> {
-    let name = path.as_ref().to_string_lossy();
-    let root = fs_root().await?;
-    let options = FileSystemGetDirectoryOptions::new();
-    options.set_create(false);
-    let dir_handle = JsFuture::from(root.get_directory_handle_with_options(&name, &options))
-        .await
-        .map_err(|err| OpfsError::from(err).into_io_err())?
-        .dyn_into::<FileSystemDirectoryHandle>()
-        .map_err(|err| OpfsError::from(err).into_io_err())?;
+    let dir_handle = open_dir(&path, false, true).await?;
     Ok(ReadDir {
         path: path.as_ref().into(),
         stream: JsStream::from(dir_handle.entries()),
@@ -39,56 +31,49 @@ pub struct ReadDir {
 
 impl ReadDir {
     pub async fn next_entry(&mut self) -> io::Result<Option<DirEntry>> {
-        self.stream
-            .next()
-            .await
-            .map_or(io::Result::Ok(None), |entry| {
-                self.process_opfs_dir_entry(entry)
-            })
+        match self.stream.next().await {
+            Some(next) => match next {
+                Ok(next) => Ok(Some(self.process_entry(&next)?)),
+                Err(err) => Err(OpfsError::from(err).into_io_err()),
+            },
+            None => io::Result::Ok(None),
+        }
     }
 
     pub fn poll_next_entry(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<Option<DirEntry>>> {
         match self.stream.poll_next_unpin(cx) {
-            Poll::Ready(entry) => entry.map_or(Poll::Ready(io::Result::Ok(None)), |entry| {
-                Poll::Ready(self.process_opfs_dir_entry(entry))
-            }),
+            Poll::Ready(next) => match next {
+                Some(next) => match next {
+                    Ok(next) => Poll::Ready(Ok(Some(self.process_entry(&next)?))),
+                    Err(err) => Poll::Ready(Err(OpfsError::from(err).into_io_err())),
+                },
+                None => todo!(),
+            },
             Poll::Pending => Poll::Pending,
         }
     }
 
-    fn process_opfs_dir_entry(
-        &self,
-        entry: Result<JsValue, JsValue>,
-    ) -> Result<Option<DirEntry>, io::Error> {
-        entry.map_or_else(
-            |err| io::Result::Err(OpfsError::from(err).into_io_err()),
-            |entry| {
-                let js_array = Array::from(&entry);
-                let name = OsString::from_str(
-                    JsString::from(js_array.get(0))
-                        .as_string()
-                        .unwrap()
-                        .as_str(),
-                )
-                .map_err(|_| io::Error::from(io::ErrorKind::InvalidFilename))?;
+    fn process_entry(&self, entry: &JsValue) -> io::Result<DirEntry> {
+        let js_array = Array::from(entry);
 
-                let kind = Reflect::get(&js_array.get(1), &JsValue::from(JsString::from("kind")))
-                    .map_err(|err| OpfsError::from(err).into_io_err())?;
-                let file_type = if let Some(kind) = kind.as_string()
-                    && kind == "directory"
-                {
-                    FileType::Directory
-                } else {
-                    FileType::File
-                };
-
-                Ok(Some(DirEntry {
-                    file_type,
-                    path: self.path.join(name.clone()),
-                    name,
-                }))
-            },
+        let name = OsString::from_str(
+            JsString::from(js_array.get(0))
+                .as_string()
+                .ok_or(io::Error::from(io::ErrorKind::InvalidFilename))?
+                .as_str(),
         )
+        .map_err(|_| io::Error::from(io::ErrorKind::InvalidFilename))?;
+
+        let handle = js_array
+            .get(1)
+            .dyn_into::<FileSystemHandle>()
+            .map_err(|err| OpfsError::from(err).into_io_err())?;
+
+        io::Result::Ok(DirEntry {
+            file_type: handle.kind().into(),
+            path: self.path.join(name.clone()),
+            name,
+        })
     }
 }
 
@@ -97,8 +82,10 @@ impl ReadDir {
 pub enum FileType {
     File,
     Directory,
+    // TODO:
     Symlink,
 }
+
 impl FileType {
     pub fn is_dir(&self) -> bool {
         *self == Self::Directory
@@ -108,6 +95,16 @@ impl FileType {
     }
     pub fn is_symlink(&self) -> bool {
         *self == Self::Symlink
+    }
+}
+
+impl From<FileSystemHandleKind> for FileType {
+    fn from(handle: FileSystemHandleKind) -> Self {
+        match handle {
+            FileSystemHandleKind::File => FileType::File,
+            FileSystemHandleKind::Directory => FileType::Directory,
+            _ => todo!(),
+        }
     }
 }
 

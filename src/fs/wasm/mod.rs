@@ -2,7 +2,6 @@ pub(crate) mod canonicalize;
 pub(crate) mod copy;
 pub(crate) mod create_dir;
 pub(crate) mod create_dir_all;
-pub(crate) mod dir;
 pub(crate) mod file;
 pub(crate) mod metadata;
 pub(crate) mod open_options;
