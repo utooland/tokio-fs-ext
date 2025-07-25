@@ -60,6 +60,8 @@ async fn test_file() {
     rename(path, rename_path).await.unwrap();
     assert_eq!(read(rename_path).await.unwrap(), data.as_bytes());
 
+    assert_eq!(read_to_string(rename_path).await.unwrap(), data);
+
     remove_file(rename_path).await.unwrap();
 
     assert!(!try_exists(rename_path).await.unwrap());

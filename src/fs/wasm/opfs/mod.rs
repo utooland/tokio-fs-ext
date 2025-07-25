@@ -74,7 +74,7 @@ pub(super) async fn open_file(
     create: bool,
     truncate_all: bool,
 ) -> io::Result<File> {
-    let virt = virtualize(path)?;
+    let virt = virtualize(&path)?;
 
     let parent = virt.parent();
 
@@ -84,7 +84,13 @@ pub(super) async fn open_file(
     }?;
 
     let dir_entry: FileSystemDirectoryHandle = match parent {
-        Some(path) => open_dir(path, false, true).await?,
+        Some(path) => {
+            if path.to_string_lossy().is_empty() {
+                fs_root().await?
+            } else {
+                open_dir(path, false, true).await?
+            }
+        }
         None => fs_root().await?,
     };
 
@@ -167,7 +173,13 @@ pub(crate) async fn rm_dir(path: impl AsRef<Path>, recursive: bool) -> io::Resul
     }?;
 
     let dir_entry: FileSystemDirectoryHandle = match parent {
-        Some(path) => open_dir(path, false, true).await?,
+        Some(path) => {
+            if path.to_string_lossy().is_empty() {
+                fs_root().await?
+            } else {
+                open_dir(path, false, true).await?
+            }
+        }
         None => fs_root().await?,
     };
 
