@@ -81,7 +81,7 @@ impl OpenOptions {
         open_file(
             path,
             self.0.contains(Flags::CREATE) && !self.0.contains(Flags::CREATE_NEW),
-            self.0.intersects(Flags::TRUNCATE),
+            self.0.contains(Flags::TRUNCATE),
         )
         .await
     }

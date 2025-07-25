@@ -13,7 +13,7 @@ use wasm_bindgen_test::*;
 use tokio_fs_ext::fs::*;
 
 #[wasm_bindgen_test]
-async fn test_directory() {
+async fn test_dir() {
     let _ = remove_dir_all("1").await;
 
     assert!(!try_exists("1").await.unwrap());
@@ -24,9 +24,9 @@ async fn test_directory() {
 
     let _ = remove_dir_all("1/2").await;
 
-    // create_dir_all("1/2").await.unwrap();
-    //
-    // assert!(try_exists("1/2").await.unwrap());
+    create_dir_all("1/2").await.unwrap();
+
+    assert!(try_exists("1/2").await.unwrap());
 }
 
 #[wasm_bindgen_test]
