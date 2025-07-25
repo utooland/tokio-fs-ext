@@ -46,6 +46,6 @@ cfg_select! {
         };
     }
     target_family = "unix" => {
-        pub use tokio::fs::ymlink;
+        pub use tokio::fs::symlink;
     }
 }
