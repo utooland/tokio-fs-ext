@@ -47,7 +47,7 @@ impl ReadDir {
                     Ok(next) => Poll::Ready(Ok(Some(self.process_entry(&next)?))),
                     Err(err) => Poll::Ready(Err(OpfsError::from(err).into_io_err())),
                 },
-                None => todo!(),
+                None => Poll::Ready(io::Result::Ok(None)),
             },
             Poll::Pending => Poll::Pending,
         }
