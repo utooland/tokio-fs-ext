@@ -41,9 +41,11 @@ cfg_select! {
             remove_dir_all,
             remove_file,
             rename,
-            symlink,
             try_exists,
             write,
         };
+    }
+    target_family = "unix" => {
+        pub use tokio::fs::ymlink;
     }
 }
