@@ -15,17 +15,8 @@ This library aims to bridge that gap by offering an API that is compatible with 
 ## Features
 
 - A `tokio::fs`-like API.
-- Pub use `tokio::fs` on native platforms and use implementations based on [`OPFS`](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system) on `wasm32-unknown-unknown` platform.
+- Reuse `tokio::fs` on native platforms, and use implementations by [`OPFS`](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system) on `wasm32-unknown-unknown` platform.
 - Asynchronous file operations for non-blocking applications.
-
-## Installation
-
-Add this to your `Cargo.toml`:
-
-```toml
-[dependencies]
-tokio-fs-ext = "0.0.1"
-```
 
 ## Usage
 ```rust
