@@ -162,22 +162,23 @@ async fn test_open_options() {
 
 #[wasm_bindgen_test]
 async fn test_metadata() {
+    let meta_dir = "meta_dir";
+    let meta_file = &format!("{meta_dir}/meta_file");
+
     assert_eq!(
         metadata("notfound").await.unwrap_err().kind(),
         io::ErrorKind::NotFound
     );
 
-    create_dir("metadata_dir").await.unwrap();
+    create_dir(meta_dir).await.unwrap();
 
-    assert!(metadata("metadata_dir").await.unwrap().is_dir());
+    assert!(metadata(meta_dir).await.unwrap().is_dir());
 
-    write("metadata_dir/metadata_file", "metadata_file")
-        .await
-        .unwrap();
+    write(meta_file, meta_file).await.unwrap();
 
-    let f_metadata = metadata("metadata_dir/metadata_file").await.unwrap();
+    let f_metadata = metadata(meta_file).await.unwrap();
 
     assert!(f_metadata.is_file());
 
-    assert!(f_metadata.len() == 13_u64)
+    assert!(f_metadata.len() == meta_file.len() as u64)
 }
