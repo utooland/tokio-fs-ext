@@ -69,19 +69,19 @@ pub(super) async fn open_file(
     option.set_create(create);
     let file_handle = JsFuture::from(root.get_file_handle_with_options(&name, &option))
         .await
-        .map_err(|err| io::Error::from(OpfsError::from(err)))?
+        .map_err(|err| OpfsError::from(err).into_io_err())?
         .dyn_into::<FileSystemFileHandle>()
-        .map_err(|err| io::Error::from(OpfsError::from(err)))?;
+        .map_err(|err| OpfsError::from(err).into_io_err())?;
     let sync_access_handle = JsFuture::from(file_handle.create_sync_access_handle())
         .await
-        .map_err(|err| io::Error::from(OpfsError::from(err)))?
+        .map_err(|err| OpfsError::from(err).into_io_err())?
         .dyn_into::<FileSystemSyncAccessHandle>()
-        .map_err(|err| io::Error::from(OpfsError::from(err)))?;
+        .map_err(|err| OpfsError::from(err).into_io_err())?;
 
     if truncate_all {
         sync_access_handle
             .truncate_with_u32(0)
-            .map_err(|err| io::Error::from(OpfsError::from(err)))?;
+            .map_err(|err| OpfsError::from(err).into_io_err())?;
     }
 
     Ok(File { sync_access_handle })

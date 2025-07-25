@@ -22,9 +22,9 @@ pub async fn read_dir(path: impl AsRef<Path>) -> io::Result<ReadDir> {
     options.set_create(false);
     let dir_handle = JsFuture::from(root.get_directory_handle_with_options(&name, &options))
         .await
-        .map_err(|err| io::Error::from(OpfsError::from(err)))?
+        .map_err(|err| OpfsError::from(err).into_io_err())?
         .dyn_into::<FileSystemDirectoryHandle>()
-        .map_err(|err| io::Error::from(OpfsError::from(err)))?;
+        .map_err(|err| OpfsError::from(err).into_io_err())?;
     Ok(ReadDir {
         path: path.as_ref().into(),
         stream: JsStream::from(dir_handle.entries()),
@@ -61,7 +61,7 @@ impl ReadDir {
         entry: Result<JsValue, JsValue>,
     ) -> Result<Option<DirEntry>, io::Error> {
         entry.map_or_else(
-            |err| io::Result::Err(io::Error::from(OpfsError::from(err))),
+            |err| io::Result::Err(OpfsError::from(err).into_io_err()),
             |entry| {
                 let js_array = Array::from(&entry);
                 let name = OsString::from_str(
@@ -73,7 +73,7 @@ impl ReadDir {
                 .map_err(|_| io::Error::from(io::ErrorKind::InvalidFilename))?;
 
                 let kind = Reflect::get(&js_array.get(1), &JsValue::from(JsString::from("kind")))
-                    .map_err(|err| io::Error::from(OpfsError::from(err)))?;
+                    .map_err(|err| OpfsError::from(err).into_io_err())?;
                 let file_type = if let Some(kind) = kind.as_string()
                     && kind == "directory"
                 {

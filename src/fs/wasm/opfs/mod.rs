@@ -20,9 +20,9 @@ pub async fn fs_root() -> io::Result<FileSystemDirectoryHandle> {
                         .get_directory(),
                 )
                 .await
-                .map_err(|err| io::Error::from(OpfsError::from(err)))?
+                .map_err(|err| OpfsError::from(err).into_io_err())?
                 .dyn_into::<FileSystemDirectoryHandle>()
-                .map_err(|err| io::Error::from(OpfsError::from(err)))?,
+                .map_err(|err| OpfsError::from(err).into_io_err())?,
             ))
         })
         .await?;
@@ -32,6 +32,12 @@ pub async fn fs_root() -> io::Result<FileSystemDirectoryHandle> {
 
 pub struct OpfsError {
     js_err: JsValue,
+}
+
+impl OpfsError {
+    pub(crate) fn into_io_err(self) -> io::Error {
+        self.into()
+    }
 }
 
 impl From<JsValue> for OpfsError {

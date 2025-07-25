@@ -24,6 +24,8 @@ async fn test_dir() {
 
     let _ = remove_dir_all("1/2").await;
 
+    assert!(!try_exists("1/2").await.unwrap());
+
     create_dir_all("1/2").await.unwrap();
 
     assert!(try_exists("1/2").await.unwrap());
@@ -81,28 +83,28 @@ async fn test_open_options() {
             .is_ok()
     );
 
-    let readonly = OpenOptions::new()
+    let _readonly = OpenOptions::new()
         .read(true)
         .create(true)
         .open("reaonly")
         .await
         .unwrap();
 
-    let writeonly = OpenOptions::new()
+    let _writeonly = OpenOptions::new()
         .read(true)
         .create(true)
         .open("writeonly")
         .await
         .unwrap();
 
-    let truncate = OpenOptions::new()
+    let _truncate = OpenOptions::new()
         .read(true)
         .create(true)
         .open("truncate")
         .await
         .unwrap();
 
-    let append = OpenOptions::new()
+    let _append = OpenOptions::new()
         .read(true)
         .create(true)
         .open("append")

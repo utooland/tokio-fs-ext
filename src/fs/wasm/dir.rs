@@ -36,18 +36,17 @@ pub(crate) async fn open_dir(
         ),
     )
     .await
-    .map_err(|err| io::Error::from(OpfsError::from(err)))?
+    .map_err(|err| OpfsError::from(err).into_io_err())?
     .dyn_into::<FileSystemDirectoryHandle>()
-    .map_err(|err| io::Error::from(OpfsError::from(err)))?;
+    .map_err(|err| OpfsError::from(err).into_io_err())?;
 
     for name in split.skip(1) {
         dir_handle = JsFuture::from(root.get_directory_handle_with_options(name, &options))
             .await
-            .map_err(|err| io::Error::from(OpfsError::from(err)))?
+            .map_err(|err| OpfsError::from(err).into_io_err())?
             .dyn_into::<FileSystemDirectoryHandle>()
-            .map_err(|err| io::Error::from(OpfsError::from(err)))?;
+            .map_err(|err| OpfsError::from(err).into_io_err())?;
     }
 
     Ok(dir_handle)
 }
-
