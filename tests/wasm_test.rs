@@ -12,6 +12,8 @@ use wasm_bindgen_test::*;
 #[cfg(test)]
 use tokio_fs_ext::fs::*;
 
+use std::io;
+
 #[wasm_bindgen_test]
 async fn test_dir() {
     let _ = remove_dir_all("/1").await;
@@ -97,6 +99,7 @@ async fn test_file() {
 
 #[wasm_bindgen_test]
 async fn test_open_options() {
+    // TODO:
     let should_not_create = "should_not_create";
     let _ = remove_file(should_not_create).await;
     assert_eq!(
@@ -110,9 +113,10 @@ async fn test_open_options() {
             .await
             .unwrap_err()
             .kind(),
-        std::io::ErrorKind::NotFound
+        io::ErrorKind::NotFound
     );
 
+    // TODO:
     let should_create = "should_create";
     let _ = remove_file(should_create).await;
     assert!(
@@ -123,6 +127,7 @@ async fn test_open_options() {
             .is_ok()
     );
 
+    // TODO:
     let _readonly = OpenOptions::new()
         .read(true)
         .create(true)
@@ -130,6 +135,7 @@ async fn test_open_options() {
         .await
         .unwrap();
 
+    // TODO:
     let _writeonly = OpenOptions::new()
         .read(true)
         .create(true)
@@ -137,6 +143,7 @@ async fn test_open_options() {
         .await
         .unwrap();
 
+    // TODO:
     let _truncate = OpenOptions::new()
         .read(true)
         .create(true)
@@ -144,10 +151,33 @@ async fn test_open_options() {
         .await
         .unwrap();
 
+    // TODO:
     let _append = OpenOptions::new()
         .read(true)
         .create(true)
         .open("append")
         .await
         .unwrap();
+}
+
+#[wasm_bindgen_test]
+async fn test_metadata() {
+    assert_eq!(
+        metadata("notfound").await.unwrap_err().kind(),
+        io::ErrorKind::NotFound
+    );
+
+    create_dir("metadata_dir").await.unwrap();
+
+    assert!(metadata("metadata_dir").await.unwrap().is_dir());
+
+    write("metadata_dir/metadata_file", "metadata_file")
+        .await
+        .unwrap();
+
+    let f_metadata = metadata("metadata_dir/metadata_file").await.unwrap();
+
+    assert!(f_metadata.is_file());
+
+    assert!(f_metadata.len() == 13_u64)
 }

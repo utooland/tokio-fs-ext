@@ -80,7 +80,7 @@ impl ReadDir {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct DirEntry {
     file_type: FileType,
     name: OsString,
