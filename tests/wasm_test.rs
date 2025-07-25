@@ -37,8 +37,10 @@ async fn test_dir() {
 
 #[wasm_bindgen_test]
 async fn test_file() {
-    let path = "hello_0";
+    let path = "/1/2/hello";
     let data = "world";
+
+    create_dir_all("/1/2").await.unwrap();
 
     let _ = remove_file(path).await;
 
@@ -54,9 +56,13 @@ async fn test_file() {
     copy(path, copy_path).await.unwrap();
     assert_eq!(read(copy_path).await.unwrap(), data.as_bytes());
 
-    remove_file(path).await.unwrap();
+    let rename_path = &format!("{path}_rename");
+    rename(path, rename_path).await.unwrap();
+    assert_eq!(read(rename_path).await.unwrap(), data.as_bytes());
 
-    assert!(!try_exists(path).await.unwrap());
+    remove_file(rename_path).await.unwrap();
+
+    assert!(!try_exists(rename_path).await.unwrap());
 }
 
 #[wasm_bindgen_test]

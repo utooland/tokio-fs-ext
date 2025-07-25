@@ -76,12 +76,21 @@ pub(super) async fn open_file(
 ) -> io::Result<File> {
     let virt = virtualize(path)?;
 
-    let name = virt.to_string_lossy();
+    let parent = virt.parent();
 
-    let root = fs_root().await?;
+    let name = match virt.file_name() {
+        Some(os_str) => Ok(os_str.to_string_lossy()),
+        None => Err(io::Error::from(io::ErrorKind::InvalidFilename)),
+    }?;
+
+    let dir_entry: FileSystemDirectoryHandle = match parent {
+        Some(path) => open_dir(path, false, true).await?,
+        None => fs_root().await?,
+    };
+
     let option = FileSystemGetFileOptions::new();
     option.set_create(create);
-    let file_handle = JsFuture::from(root.get_file_handle_with_options(&name, &option))
+    let file_handle = JsFuture::from(dir_entry.get_file_handle_with_options(&name, &option))
         .await
         .map_err(|err| OpfsError::from(err).into_io_err())?
         .dyn_into::<FileSystemFileHandle>()
@@ -110,7 +119,7 @@ pub(crate) async fn open_dir(
 
     let components = virt
         .components()
-        .map(|c| c.as_os_str().to_str().unwrap())
+        .map(|c| c.as_os_str().to_string_lossy())
         .collect::<Vec<_>>();
 
     if components.is_empty() || (!recursive && components.len() > 1) {
@@ -123,7 +132,7 @@ pub(crate) async fn open_dir(
     let root = fs_root().await?;
 
     let mut dir_handle =
-        JsFuture::from(root.get_directory_handle_with_options(components[0], &options))
+        JsFuture::from(root.get_directory_handle_with_options(&components[0], &options))
             .await
             .map_err(|err| OpfsError::from(err).into_io_err())?
             .dyn_into::<FileSystemDirectoryHandle>()
@@ -150,13 +159,22 @@ pub(crate) async fn open_dir(
 pub(crate) async fn rm_dir(path: impl AsRef<Path>, recursive: bool) -> io::Result<()> {
     let virt = virtualize(path)?;
 
-    let name = virt.to_string_lossy();
+    let parent = virt.parent();
+
+    let name = match virt.file_name() {
+        Some(os_str) => Ok(os_str.to_string_lossy()),
+        None => Err(io::Error::from(io::ErrorKind::InvalidFilename)),
+    }?;
+
+    let dir_entry: FileSystemDirectoryHandle = match parent {
+        Some(path) => open_dir(path, false, true).await?,
+        None => fs_root().await?,
+    };
 
     let options = FileSystemRemoveOptions::new();
     options.set_recursive(recursive);
 
-    let root = fs_root().await?;
-    JsFuture::from(root.remove_entry_with_options(&name, &options))
+    JsFuture::from(dir_entry.remove_entry_with_options(&name, &options))
         .await
         .map_err(|err| OpfsError::from(err).into_io_err())?;
 
