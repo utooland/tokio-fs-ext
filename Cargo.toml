@@ -1,11 +1,12 @@
 [package]
 name = "tokio-fs-ext"
-version = "0.0.4"
+version = "0.0.5"
 edition = "2024"
 authors = ["xusd320"]
 description = "Extend tokio fs to be compatible with native and wasm"
 license = "MIT"
 repository = "https://github.com/xusd320/tokio-fs-ext.git"
+keywords = ["tokio", "fs", "wasm"]
 
 
 [lib]
@@ -56,3 +57,13 @@ wasm-bindgen-test = "0.3.50"
 
 [package.metadata.wasm-pack.profile.dev.wasm-bindgen]
 dwarf-debug-info = true
+
+[package.metadata.docs.rs]
+targets = [
+  "x86_64-pc-windows-msvc",
+  "x86_64-unknown-linux-gnu",
+  "aarch64-unknown-linux-gnu",
+  "x86_64-apple-darwin",
+  "aarch64-apple-darwin",
+  "wasm32-unknown-unknown",
+]
