@@ -18,7 +18,7 @@ use crate::fs::File;
 
 static FS_ROOT: OnceCell<SendWrapper<FileSystemDirectoryHandle>> = OnceCell::const_new();
 
-pub async fn fs_root() -> io::Result<FileSystemDirectoryHandle> {
+async fn opfs_root() -> io::Result<FileSystemDirectoryHandle> {
     let root = FS_ROOT
         .get_or_try_init(|| async {
             io::Result::Ok(SendWrapper::new(
@@ -84,14 +84,14 @@ pub(super) async fn open_file(
     }?;
 
     let dir_entry: FileSystemDirectoryHandle = match parent {
-        Some(path) => {
-            if path.to_string_lossy().is_empty() {
-                fs_root().await?
+        Some(parent_path) => {
+            if parent_path.to_string_lossy().is_empty() {
+                opfs_root().await?
             } else {
-                open_dir(path, OpenDirType::NotCreate).await?
+                open_dir(parent_path, OpenDirType::NotCreate).await?
             }
         }
-        None => fs_root().await?,
+        None => opfs_root().await?,
     };
 
     let option = FileSystemGetFileOptions::new();
@@ -119,13 +119,13 @@ pub(super) async fn open_file(
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum OpenDirType {
     Create,
-    RecursiveCreate,
+    CreateRecursive,
     NotCreate,
 }
 
 pub(crate) async fn open_dir(
     path: impl AsRef<Path>,
-    ops: OpenDirType,
+    r#type: OpenDirType,
 ) -> io::Result<FileSystemDirectoryHandle> {
     let virt = virtualize(path)?;
 
@@ -139,19 +139,21 @@ pub(crate) async fn open_dir(
     }
 
     let mut dir_handle = get_dir_handle(
-        fs_root().await?,
+        opfs_root().await?,
         &components[0],
-        matches!(ops, OpenDirType::Create | OpenDirType::RecursiveCreate),
+        matches!(r#type, OpenDirType::Create | OpenDirType::CreateRecursive),
     )
     .await?;
 
     let mut depth = 1_usize;
 
     for c in components.iter().skip(1) {
-        if !matches!(ops, OpenDirType::RecursiveCreate) {
-            return Err(io::Error::from(io::ErrorKind::NotFound));
-        }
-        dir_handle = get_dir_handle(dir_handle, c, true).await?;
+        dir_handle = get_dir_handle(
+            dir_handle,
+            c,
+            matches!(r#type, OpenDirType::CreateRecursive),
+        )
+        .await?;
         depth += 1;
     }
 
@@ -190,12 +192,12 @@ pub(crate) async fn rm(path: impl AsRef<Path>, recursive: bool) -> io::Result<()
     let dir_entry: FileSystemDirectoryHandle = match parent {
         Some(path) => {
             if path.to_string_lossy().is_empty() {
-                fs_root().await?
+                opfs_root().await?
             } else {
                 open_dir(path, OpenDirType::NotCreate).await?
             }
         }
-        None => fs_root().await?,
+        None => opfs_root().await?,
     };
 
     let options = FileSystemRemoveOptions::new();
@@ -209,6 +211,7 @@ pub(crate) async fn rm(path: impl AsRef<Path>, recursive: bool) -> io::Result<()
 }
 
 pub(crate) fn virtualize(path: impl AsRef<Path>) -> Result<PathBuf, io::Error> {
+    // TODO: should handle symlink here
     let mut out = Vec::new();
 
     for comp in path.as_ref().components() {
