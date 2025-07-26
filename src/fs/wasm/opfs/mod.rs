@@ -88,7 +88,7 @@ pub(super) async fn open_file(
             if path.to_string_lossy().is_empty() {
                 fs_root().await?
             } else {
-                open_dir(path, false, false).await?
+                open_dir(path, OpenDirType::NotCreate).await?
             }
         }
         None => fs_root().await?,
@@ -116,15 +116,17 @@ pub(super) async fn open_file(
     Ok(File { sync_access_handle })
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum OpenDirType {
+    Create,
+    RecursiveCreate,
+    NotCreate,
+}
+
 pub(crate) async fn open_dir(
     path: impl AsRef<Path>,
-    create: bool,
-    create_recursive: bool,
+    ops: OpenDirType,
 ) -> io::Result<FileSystemDirectoryHandle> {
-    if create_recursive && !create {
-        return Err(io::Error::from(io::ErrorKind::InvalidInput));
-    }
-
     let virt = virtualize(path)?;
 
     let components = virt
@@ -136,30 +138,20 @@ pub(crate) async fn open_dir(
         return Err(io::Error::from(io::ErrorKind::InvalidInput));
     }
 
-    if create && !create_recursive && components.len() > 1 {
-        return Err(io::Error::from(io::ErrorKind::NotFound));
-    }
-
-    let options = FileSystemGetDirectoryOptions::new();
-    options.set_create(create);
-
-    let root = fs_root().await?;
-
-    let mut dir_handle =
-        JsFuture::from(root.get_directory_handle_with_options(&components[0], &options))
-            .await
-            .map_err(|err| OpfsError::from(err).into_io_err())?
-            .dyn_into::<FileSystemDirectoryHandle>()
-            .map_err(|err| OpfsError::from(err).into_io_err())?;
+    let mut dir_handle = get_dir_handle(
+        fs_root().await?,
+        &components[0],
+        matches!(ops, OpenDirType::Create | OpenDirType::RecursiveCreate),
+    )
+    .await?;
 
     let mut depth = 1_usize;
 
     for c in components.iter().skip(1) {
-        dir_handle = JsFuture::from(dir_handle.get_directory_handle_with_options(c, &options))
-            .await
-            .map_err(|err| OpfsError::from(err).into_io_err())?
-            .dyn_into::<FileSystemDirectoryHandle>()
-            .map_err(|err| OpfsError::from(err).into_io_err())?;
+        if !matches!(ops, OpenDirType::RecursiveCreate) {
+            return Err(io::Error::from(io::ErrorKind::NotFound));
+        }
+        dir_handle = get_dir_handle(dir_handle, c, true).await?;
         depth += 1;
     }
 
@@ -168,6 +160,21 @@ pub(crate) async fn open_dir(
     }
 
     Ok(dir_handle)
+}
+
+async fn get_dir_handle(
+    parent: FileSystemDirectoryHandle,
+    path: &str,
+    create: bool,
+) -> io::Result<FileSystemDirectoryHandle> {
+    let options = FileSystemGetDirectoryOptions::new();
+    options.set_create(create);
+
+    JsFuture::from(parent.get_directory_handle_with_options(path, &options))
+        .await
+        .map_err(|err| OpfsError::from(err).into_io_err())?
+        .dyn_into::<FileSystemDirectoryHandle>()
+        .map_err(|err| OpfsError::from(err).into_io_err())
 }
 
 pub(crate) async fn rm(path: impl AsRef<Path>, recursive: bool) -> io::Result<()> {
@@ -185,7 +192,7 @@ pub(crate) async fn rm(path: impl AsRef<Path>, recursive: bool) -> io::Result<()
             if path.to_string_lossy().is_empty() {
                 fs_root().await?
             } else {
-                open_dir(path, false, false).await?
+                open_dir(path, OpenDirType::NotCreate).await?
             }
         }
         None => fs_root().await?,

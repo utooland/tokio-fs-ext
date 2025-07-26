@@ -77,9 +77,11 @@ pub async fn metadata(path: impl AsRef<Path>) -> io::Result<Metadata> {
                 len,
             })
         }
-        Err(_) => Ok(open_dir(path, false, false).await.map(|_| Metadata {
-            file_type: FileType::Directory,
-            len: 0,
-        })?),
+        Err(_) => Ok(open_dir(path, super::opfs::OpenDirType::NotCreate)
+            .await
+            .map(|_| Metadata {
+                file_type: FileType::Directory,
+                len: 0,
+            })?),
     }
 }

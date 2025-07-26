@@ -19,7 +19,7 @@ use crate::fs::{
 };
 
 pub async fn read_dir(path: impl AsRef<Path>) -> io::Result<ReadDir> {
-    let dir_handle = open_dir(&path, false, false).await?;
+    let dir_handle = open_dir(&path, super::opfs::OpenDirType::NotCreate).await?;
     Ok(ReadDir {
         path: path.as_ref().into(),
         stream: JsStream::from(dir_handle.entries()),

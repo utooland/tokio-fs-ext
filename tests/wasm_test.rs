@@ -67,6 +67,8 @@ async fn test_dir() {
 
 #[wasm_bindgen_test]
 async fn test_file() {
+    let _ = remove_dir_all("/1").await;
+
     let path = "/1/2/hello";
     let data = "world";
 
