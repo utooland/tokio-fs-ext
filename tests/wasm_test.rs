@@ -174,13 +174,13 @@ async fn test_open_options() {
         assert_eq!(str::from_utf8(data.as_slice()).unwrap(), contents);
     }
 
-    // TODO: 
     // {
     //     let mut rw_file = OpenOptions::new().read(true).open(readwrite).await.unwrap();
     //     rw_file.seek(io::SeekFrom::Start(0)).await.unwrap();
 
     //     let mut data = vec![0; rw_file.size().unwrap() as usize];
 
+    // //  TODO:adopt to tokio small read: https://github.com/tokio-rs/tokio/blob/tokio-1.46.1/tokio/src/io/util/read_to_end.rs#L77
     //     assert!(rw_file.read_to_end(&mut data).await.is_ok());
 
     //     assert_eq!(str::from_utf8(data.as_slice()).unwrap(), contents);
