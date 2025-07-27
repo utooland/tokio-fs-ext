@@ -43,8 +43,8 @@ impl From<FileSystemHandleKind> for FileType {
 
 #[derive(Debug)]
 pub struct Metadata {
-    file_type: FileType,
-    len: u64,
+    pub(crate) file_type: FileType,
+    pub(crate) file_size: u64,
 }
 
 impl Metadata {
@@ -61,12 +61,12 @@ impl Metadata {
     }
 
     pub fn len(&self) -> u64 {
-        self.len
+        self.file_size
     }
 }
 
 pub async fn metadata(path: impl AsRef<Path>) -> io::Result<Metadata> {
-    match open_file(&path, false, false).await {
+    match open_file(&path, false, false, super::opfs::SyncAccessMode::Readonly).await {
         Ok(file) => {
             let len = file
                 .sync_access_handle
@@ -74,14 +74,14 @@ pub async fn metadata(path: impl AsRef<Path>) -> io::Result<Metadata> {
                 .map_err(|err| OpfsError::from(err).into_io_err())? as u64;
             Ok(Metadata {
                 file_type: FileType::File,
-                len,
+                file_size: len,
             })
         }
         Err(_) => Ok(open_dir(path, super::opfs::OpenDirType::NotCreate)
             .await
             .map(|_| Metadata {
                 file_type: FileType::Directory,
-                len: 0,
+                file_size: 0,
             })?),
     }
 }

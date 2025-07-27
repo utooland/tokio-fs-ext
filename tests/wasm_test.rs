@@ -1,5 +1,6 @@
 #![cfg(all(target_family = "wasm", target_os = "unknown"))]
 
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 #[cfg(test)]
 use wasm_bindgen_test::wasm_bindgen_test_configure;
 
@@ -101,7 +102,6 @@ async fn test_file() {
 
 #[wasm_bindgen_test]
 async fn test_open_options() {
-    // TODO:
     let should_not_create = "should_not_create";
     let _ = remove_file(should_not_create).await;
     assert_eq!(
@@ -118,7 +118,6 @@ async fn test_open_options() {
         io::ErrorKind::NotFound
     );
 
-    // TODO:
     let should_create = "should_create";
     let _ = remove_file(should_create).await;
     assert!(
@@ -128,22 +127,68 @@ async fn test_open_options() {
             .await
             .is_ok()
     );
+    let should_create_new = "should_create_new";
+    let _ = remove_file(should_create_new).await;
+    assert!(
+        OpenOptions::new()
+            .create_new(true)
+            .open(should_create)
+            .await
+            .is_ok()
+    );
 
-    // TODO:
     let _readonly = OpenOptions::new()
         .read(true)
         .create(true)
-        .open("reaonly")
+        .open("readonly")
         .await
         .unwrap();
 
+    assert_eq!(
+        write("readonly", "readonly").await.unwrap_err().kind(),
+        io::ErrorKind::PermissionDenied
+    );
+
     // TODO:
-    let _writeonly = OpenOptions::new()
-        .read(true)
-        .create(true)
-        .open("writeonly")
-        .await
-        .unwrap();
+    let readwrite = "readwrite";
+    let contents = "somedata".repeat(4);
+    {
+        let mut rw_file = OpenOptions::new()
+            .write(true)
+            .read(true)
+            .create(true)
+            .open(readwrite)
+            .await
+            .unwrap();
+
+        assert!(rw_file.write(contents.as_bytes()).await.is_ok());
+        let mut data = vec![0; rw_file.size().unwrap()];
+        assert!(rw_file.read(&mut data).await.is_ok());
+        // assert_eq!(data.as_slice(), contents.as_bytes());
+    }
+
+    {
+        let readwrite = "readwrite";
+        {
+            let mut rw_file = OpenOptions::new()
+                // .write(true)
+                .read(true)
+                // .create(true)
+                .open(readwrite)
+                .await
+                .unwrap();
+
+            let mut data = vec![0; rw_file.size().unwrap()];
+
+            assert!(rw_file.read(&mut data).await.is_ok());
+
+            assert_eq!(data.as_slice(), contents.as_bytes());
+        }
+    }
+    assert_eq!(
+        read(readwrite).await.unwrap().as_slice(),
+        contents.as_bytes()
+    );
 
     // TODO:
     let _truncate = OpenOptions::new()

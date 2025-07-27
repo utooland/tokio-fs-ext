@@ -3,10 +3,10 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-use js_sys::Object;
+use js_sys::{Function, Object, Promise, Reflect};
 use send_wrapper::SendWrapper;
 use tokio::sync::OnceCell;
-use wasm_bindgen::{JsCast, JsValue};
+use wasm_bindgen::{JsCast, JsValue, prelude::wasm_bindgen};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
     DedicatedWorkerGlobalScope, DomException, FileSystemDirectoryHandle, FileSystemFileHandle,
@@ -60,7 +60,9 @@ impl From<OpfsError> for io::Error {
         match opfs_err.js_err.clone().dyn_into::<DomException>() {
             Ok(e) => match e.name().as_str() {
                 "NotFoundError" => io::Error::from(io::ErrorKind::NotFound),
-                "NotAllowedError" => io::Error::from(io::ErrorKind::PermissionDenied),
+                "NotAllowedError" | "NoModificationAllowedError" => {
+                    io::Error::from(io::ErrorKind::PermissionDenied)
+                }
                 "TypeMismatchError" => io::Error::other("type mismatch"),
                 msg => io::Error::other(msg),
             },
@@ -69,10 +71,33 @@ impl From<OpfsError> for io::Error {
     }
 }
 
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyncAccessMode {
+    Readonly = "read-only",
+    Readwrite = "readwrite",
+    ReadwriteUnsafe = "readwrite-unsafe",
+}
+
+// The file mode is still experimental:
+// https://developer.mozilla.org/en-US/docs/Web/API/FileSystemFileHandle/createSyncAccessHandle#options
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CreateSyncAccessHandleOptions {
+    mode: SyncAccessMode,
+}
+
+impl From<SyncAccessMode> for CreateSyncAccessHandleOptions {
+    fn from(mode: SyncAccessMode) -> Self {
+        Self { mode }
+    }
+}
+
 pub(super) async fn open_file(
     path: impl AsRef<Path>,
     create: bool,
     truncate: bool,
+    mode: SyncAccessMode,
 ) -> io::Result<File> {
     let virt = virtualize(&path)?;
 
@@ -101,7 +126,22 @@ pub(super) async fn open_file(
         .map_err(|err| OpfsError::from(err).into_io_err())?
         .dyn_into::<FileSystemFileHandle>()
         .map_err(|err| OpfsError::from(err).into_io_err())?;
-    let sync_access_handle = JsFuture::from(file_handle.create_sync_access_handle())
+
+    let file_handle_js_value = JsValue::from(file_handle);
+
+    let promise = Reflect::get(&file_handle_js_value, &"createSyncAccessHandle".into())
+        .map_err(|err| OpfsError::from(err).into_io_err())?
+        .dyn_into::<Function>()
+        .map_err(|err| OpfsError::from(err).into_io_err())?
+        .call1(
+            &file_handle_js_value,
+            &CreateSyncAccessHandleOptions::from(mode).into(),
+        )
+        .map_err(|err| OpfsError::from(err).into_io_err())?
+        .dyn_into::<Promise>()
+        .map_err(|err| OpfsError::from(err).into_io_err())?;
+
+    let sync_access_handle = JsFuture::from(promise)
         .await
         .map_err(|err| OpfsError::from(err).into_io_err())?
         .dyn_into::<FileSystemSyncAccessHandle>()

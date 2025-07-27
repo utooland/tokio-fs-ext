@@ -1,17 +1,20 @@
 use bitflags::bitflags;
 use std::{io, path::Path};
 
-use crate::fs::{File, opfs::open_file};
+use crate::fs::{
+    File,
+    opfs::{SyncAccessMode, open_file},
+};
 
 bitflags! {
     #[derive(Clone, Default, Debug, Copy)]
     struct Flags: u8 {
-        const READ = 0b0000_0001;
-        const WRITE= 0b0000_0010;
-        const APPEND = 0b0000_0100;
-        const CREATE = 0b0000_1000;
-        const TRUNCATE = 0b0001_0000;
-        const CREATE_NEW = 0b0010_0000;
+        const READ = 1 << 0;
+        const WRITE= 1 << 1;
+        const APPEND = 1 << 2;
+        const CREATE = 1 << 3;
+        const TRUNCATE = 1 << 4;
+        const CREATE_NEW = 1 << 5;
     }
 }
 
@@ -81,8 +84,19 @@ impl OpenOptions {
         open_file(
             path,
             self.0.contains(Flags::CREATE) && !self.0.contains(Flags::CREATE_NEW),
-            self.0.contains(Flags::TRUNCATE),
+            !(self.0 & (Flags::TRUNCATE | Flags::CREATE)).is_empty(),
+            self.into(),
         )
         .await
+    }
+}
+
+impl From<&OpenOptions> for SyncAccessMode {
+    fn from(options: &OpenOptions) -> Self {
+        if (options.0 & (Flags::APPEND | Flags::WRITE | Flags::TRUNCATE)).is_empty() {
+            SyncAccessMode::Readonly
+        } else {
+            SyncAccessMode::Readwrite
+        }
     }
 }
