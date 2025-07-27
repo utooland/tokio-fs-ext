@@ -16,7 +16,7 @@ crate-type = ["cdylib", "rlib"]
 
 
 [target.'cfg(not(all(target_family = "wasm", target_os = "unknown")))'.dependencies]
-tokio = { version = "1.46.1", default-features = false, features = [
+tokio = { path = "../tokio/tokio", default-features = false, features = [
   "fs",
   "sync",
   "io-util",
@@ -47,7 +47,7 @@ wasm-bindgen = { version = "0.2.100", default-features = false }
 wasm-bindgen-futures = { version = "0.4.50", features = [
   "futures-core-03-stream",
 ] }
-tokio = { version = "1.46.1", default-features = false, features = [
+tokio = { path = "../tokio/tokio", default-features = false, features = [
   "sync",
   "io-util",
 ] }

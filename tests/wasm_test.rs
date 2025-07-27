@@ -1,6 +1,6 @@
 #![cfg(all(target_family = "wasm", target_os = "unknown"))]
 
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 #[cfg(test)]
 use wasm_bindgen_test::wasm_bindgen_test_configure;
 
@@ -149,9 +149,8 @@ async fn test_open_options() {
         io::ErrorKind::PermissionDenied
     );
 
-    // TODO:
     let readwrite = "readwrite";
-    let contents = "somedata".repeat(4);
+    let contents = "somedata".repeat(16);
     {
         let mut rw_file = OpenOptions::new()
             .write(true)
@@ -162,49 +161,61 @@ async fn test_open_options() {
             .unwrap();
 
         assert!(rw_file.write(contents.as_bytes()).await.is_ok());
-        let mut data = vec![0; rw_file.size().unwrap()];
+        let mut data = vec![0; rw_file.size().unwrap() as usize];
         assert!(rw_file.read(&mut data).await.is_ok());
-        // assert_eq!(data.as_slice(), contents.as_bytes());
+        assert_eq!(str::from_utf8(data.as_slice()).unwrap(), contents);
     }
 
     {
-        let readwrite = "readwrite";
-        {
-            let mut rw_file = OpenOptions::new()
-                // .write(true)
-                .read(true)
-                // .create(true)
-                .open(readwrite)
-                .await
-                .unwrap();
+        let mut rw_file = OpenOptions::new().read(true).open(readwrite).await.unwrap();
 
-            let mut data = vec![0; rw_file.size().unwrap()];
-
-            assert!(rw_file.read(&mut data).await.is_ok());
-
-            assert_eq!(data.as_slice(), contents.as_bytes());
-        }
+        let mut data = vec![0; rw_file.size().unwrap() as usize];
+        assert!(rw_file.read(&mut data).await.is_ok());
+        assert_eq!(str::from_utf8(data.as_slice()).unwrap(), contents);
     }
-    assert_eq!(
-        read(readwrite).await.unwrap().as_slice(),
-        contents.as_bytes()
-    );
 
-    // TODO:
-    let _truncate = OpenOptions::new()
-        .read(true)
-        .create(true)
-        .open("truncate")
-        .await
-        .unwrap();
+    // TODO: 
+    // {
+    //     let mut rw_file = OpenOptions::new().read(true).open(readwrite).await.unwrap();
+    //     rw_file.seek(io::SeekFrom::Start(0)).await.unwrap();
 
-    // TODO:
-    let _append = OpenOptions::new()
+    //     let mut data = vec![0; rw_file.size().unwrap() as usize];
+
+    //     assert!(rw_file.read_to_end(&mut data).await.is_ok());
+
+    //     assert_eq!(str::from_utf8(data.as_slice()).unwrap(), contents);
+    // }
+
+    let truncate = "truncate";
+    write(truncate, truncate.as_bytes()).await.unwrap();
+    assert_eq!(read(truncate).await.unwrap(), truncate.as_bytes());
+    {
+        let _truncate = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .open("truncate")
+            .await
+            .unwrap();
+        assert_eq!(
+            read(truncate).await.unwrap_err().kind(),
+            io::ErrorKind::PermissionDenied
+        );
+    };
+    assert!(read(truncate).await.unwrap().is_empty());
+
+    write("append", "append").await.unwrap();
+    let mut append = OpenOptions::new()
+        .append(true)
         .read(true)
-        .create(true)
         .open("append")
         .await
         .unwrap();
+
+    append.write_all("append".as_bytes()).await.unwrap();
+    append.seek(io::SeekFrom::Start(0)).await.unwrap();
+    let mut data = vec![0; append.size().unwrap() as usize];
+    append.read(&mut data).await.unwrap();
+    assert_eq!(data.as_slice(), "append".repeat(2).as_bytes());
 }
 
 #[wasm_bindgen_test]

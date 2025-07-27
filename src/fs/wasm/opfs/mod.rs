@@ -1,6 +1,7 @@
 use std::{
     io,
     path::{Component, Path, PathBuf},
+    sync::Mutex,
 };
 
 use js_sys::{Function, Object, Promise, Reflect};
@@ -153,7 +154,10 @@ pub(super) async fn open_file(
             .map_err(|err| OpfsError::from(err).into_io_err())?;
     }
 
-    Ok(File { sync_access_handle })
+    Ok(File {
+        sync_access_handle,
+        pos: Mutex::new(0),
+    })
 }
 
 #[derive(Debug, Clone, Copy)]

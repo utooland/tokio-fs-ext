@@ -1,5 +1,6 @@
 use bitflags::bitflags;
 use std::{io, path::Path};
+use tokio::io::AsyncSeekExt;
 
 use crate::fs::{
     File,
@@ -7,7 +8,7 @@ use crate::fs::{
 };
 
 bitflags! {
-    #[derive(Clone, Default, Debug, Copy)]
+    #[derive(Clone , Debug, Copy)]
     struct Flags: u8 {
         const READ = 1 << 0;
         const WRITE= 1 << 1;
@@ -15,6 +16,12 @@ bitflags! {
         const CREATE = 1 << 3;
         const TRUNCATE = 1 << 4;
         const CREATE_NEW = 1 << 5;
+    }
+}
+
+impl Default for Flags {
+    fn default() -> Self {
+        Flags::READ
     }
 }
 
@@ -81,13 +88,17 @@ impl OpenOptions {
     }
 
     pub async fn open(&self, path: impl AsRef<Path>) -> io::Result<File> {
-        open_file(
+        let mut file = open_file(
             path,
             self.0.contains(Flags::CREATE) && !self.0.contains(Flags::CREATE_NEW),
             !(self.0 & (Flags::TRUNCATE | Flags::CREATE)).is_empty(),
             self.into(),
         )
-        .await
+        .await?;
+        if self.0.contains(Flags::APPEND) {
+            file.seek(io::SeekFrom::End(0)).await?;
+        }
+        Ok(file)
     }
 }
 
