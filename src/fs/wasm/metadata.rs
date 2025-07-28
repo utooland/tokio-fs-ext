@@ -60,6 +60,7 @@ impl Metadata {
         self.file_type.is_symlink()
     }
 
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> u64 {
         self.file_size
     }
