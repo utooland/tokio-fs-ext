@@ -193,34 +193,32 @@ async fn test_file_remove() {
     let _ = remove_dir_all(base_dir).await;
 }
 
-// FIXME:
-// #[wasm_bindgen_test]
-// async fn test_open_options_create_new_fails_if_exists() {
-//     let path = "/test_open_options_create_new_fails_if_exists";
-//     let _ = remove_file(path).await;
-//     write(path, "dummy").await.unwrap();
-//
-//     let err = OpenOptions::new()
-//         .create_new(true)
-//         .open(path)
-//         .await
-//         .unwrap_err();
-//     assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
-//
-//     let _ = remove_file(path).await;
-// }
+#[wasm_bindgen_test]
+async fn test_open_options_create_new_fails_if_exists() {
+    let path = "/test_open_options_create_new_fails_if_exists";
+    let _ = remove_file(path).await;
+    write(path, "dummy").await.unwrap();
 
-// FIXME:
-// #[wasm_bindgen_test]
-// async fn test_open_options_create_new_succeeds_if_not_exists() {
-//     let path = "/test_open_options_create_new_succeeds_if_not_exists";
-//     let _ = remove_file(path).await;
-//
-//     let result = OpenOptions::new().create_new(true).open(path).await;
-//     assert!(result.is_ok());
-//
-//     let _ = remove_file(path).await;
-// }
+    let err = OpenOptions::new()
+        .create_new(true)
+        .open(path)
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
+
+    let _ = remove_file(path).await;
+}
+
+#[wasm_bindgen_test]
+async fn test_open_options_create_new_succeeds_if_not_exists() {
+    let path = "/test_open_options_create_new_succeeds_if_not_exists";
+    let _ = remove_file(path).await;
+
+    let result = OpenOptions::new().create_new(true).open(path).await;
+    assert!(result.is_ok());
+
+    let _ = remove_file(path).await;
+}
 
 #[wasm_bindgen_test]
 async fn test_open_options_create_succeeds() {

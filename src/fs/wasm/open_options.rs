@@ -4,7 +4,7 @@ use tokio::io::AsyncSeekExt;
 
 use crate::fs::{
     File,
-    opfs::{SyncAccessMode, open_file},
+    opfs::{CreateFileMode, SyncAccessMode, open_file},
 };
 
 bitflags! {
@@ -90,15 +90,29 @@ impl OpenOptions {
     pub async fn open(&self, path: impl AsRef<Path>) -> io::Result<File> {
         let mut file = open_file(
             path,
-            self.0.contains(Flags::CREATE) && !self.0.contains(Flags::CREATE_NEW),
+            self.into(),
             !(self.0 & (Flags::TRUNCATE | Flags::CREATE)).is_empty(),
             self.into(),
         )
         .await?;
+
         if self.0.contains(Flags::APPEND) {
             file.seek(io::SeekFrom::End(0)).await?;
         }
+
         Ok(file)
+    }
+}
+
+impl From<&OpenOptions> for CreateFileMode {
+    fn from(options: &OpenOptions) -> Self {
+        if options.0.contains(Flags::CREATE) {
+            CreateFileMode::Create
+        } else if options.0.contains(Flags::CREATE_NEW) {
+            CreateFileMode::CreateNew
+        } else {
+            CreateFileMode::NotCreate
+        }
     }
 }
 

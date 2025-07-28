@@ -27,14 +27,23 @@ impl File {
     pub async fn create(path: impl AsRef<Path>) -> io::Result<File> {
         let mut open_options = OpenOptions::new();
         open_options.create(true);
-        open_file(path, true, true, SyncAccessMode::Readonly).await
+        open_file(
+            path,
+            super::opfs::CreateFileMode::Create,
+            true,
+            SyncAccessMode::Readonly,
+        )
+        .await
     }
 
     pub async fn create_new<P: AsRef<Path>>(path: P) -> std::io::Result<File> {
-        if (open_file(&path, true, false, SyncAccessMode::Readonly).await).is_ok() {
-            return Err(io::Error::from(io::ErrorKind::AlreadyExists));
-        }
-        File::create(path).await
+        open_file(
+            &path,
+            super::opfs::CreateFileMode::CreateNew,
+            false,
+            SyncAccessMode::Readonly,
+        )
+        .await
     }
 
     pub async fn metadata(&self) -> io::Result<Metadata> {
@@ -45,7 +54,13 @@ impl File {
     }
 
     pub async fn open(path: impl AsRef<Path>) -> io::Result<File> {
-        open_file(path, false, false, SyncAccessMode::Readonly).await
+        open_file(
+            path,
+            super::opfs::CreateFileMode::NotCreate,
+            false,
+            SyncAccessMode::Readonly,
+        )
+        .await
     }
 
     #[must_use]
