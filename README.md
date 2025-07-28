@@ -44,5 +44,6 @@ async fn foo() -> io::Result<()> {
 ## Testing
 ```bash
 brew install --cask chromedriver
+brew install wasm-pack
 cargo test --target wasm32-unknown-unknown
 ```
