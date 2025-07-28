@@ -400,7 +400,7 @@ async fn test_metadata_is_file_and_len() {
 }
 
 // FIXME:
-#[wasm_bindgen_test]
+// #[wasm_bindgen_test]
 // async fn test_async_seek() {
 //     let path = "/test_async_seek/seek_file.txt";
 //     let initial_content = "Hello, world!"; // 13 bytes

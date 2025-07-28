@@ -129,7 +129,7 @@ impl AsyncRead for File {
         buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
         // Must ensure the write been filled with real size of file
-        self.read_with_buf(buf.filled_mut())?;
+        self.read_with_buf(buf.initialized_mut())?;
 
         Poll::Ready(Ok(()))
     }
