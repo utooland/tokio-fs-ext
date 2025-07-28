@@ -11,7 +11,6 @@ The standard `tokio::fs` module in the Tokio runtime is a powerful tool for asyn
 
 This library aims to bridge that gap by offering an API that is compatible with `tokio::fs` but works seamlessly in WASM. It provides a consistent interface for file system operations, regardless of the target platform.
 
-
 ## Features
 
 - A `tokio::fs`-like API.
@@ -19,6 +18,7 @@ This library aims to bridge that gap by offering an API that is compatible with 
 - Asynchronous file operations for non-blocking applications.
 
 ## Usage
+
 ```rust
 use tokio_fs_ext as fs;
 use std::io;
@@ -38,12 +38,18 @@ async fn foo() -> io::Result<()> {
 ```
 
 ## Clarification
+
 - The implements for WebAssembly can only be used in [`DedicatedWorkerGlobalScope`](https://developer.mozilla.org/en-US/docs/Web/API/DedicatedWorkerGlobalScope).
 
 ## Contributing
+
 ## Testing
+
 ```bash
 brew install --cask chromedriver
-brew install wasm-pack
 cargo test --target wasm32-unknown-unknown
+
+# test in Interactive mode
+brew install wasm-pack
+wasm-pack test --chrome
 ```
