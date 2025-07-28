@@ -9,12 +9,10 @@ use std::{
 use tokio::io::{AsyncRead, AsyncSeek, AsyncWrite, ReadBuf};
 use web_sys::{FileSystemReadWriteOptions, FileSystemSyncAccessHandle};
 
-use crate::{
-    fs::{
-        OpenOptions,
-        opfs::{OpfsError, open_file},
-        wasm::metadata::Metadata,
-    },
+use crate::fs::{
+    OpenOptions,
+    opfs::{OpfsError, open_file},
+    wasm::metadata::Metadata,
 };
 
 use super::{metadata::FileType, opfs::SyncAccessMode};
@@ -26,10 +24,6 @@ pub struct File {
 }
 
 impl File {
-    pub async fn open(path: impl AsRef<Path>) -> io::Result<File> {
-        open_file(path, false, false, SyncAccessMode::Readonly).await
-    }
-
     pub async fn create(path: impl AsRef<Path>) -> io::Result<File> {
         let mut open_options = OpenOptions::new();
         open_options.create(true);
@@ -43,9 +37,28 @@ impl File {
         File::create(path).await
     }
 
+    pub async fn metadata(&self) -> io::Result<Metadata> {
+        Ok(Metadata {
+            file_type: FileType::File,
+            file_size: self.size()?,
+        })
+    }
+
+    pub async fn open(path: impl AsRef<Path>) -> io::Result<File> {
+        open_file(path, false, false, SyncAccessMode::Readonly).await
+    }
+
     #[must_use]
     pub fn options() -> OpenOptions {
         OpenOptions::new()
+    }
+
+    pub async fn sync_all(&self) -> io::Result<()> {
+        self.flush()
+    }
+
+    pub async fn sync_data(&self) -> io::Result<()> {
+        self.flush()
     }
 
     pub fn size(&self) -> io::Result<u64> {
@@ -54,14 +67,9 @@ impl File {
             |size| Ok(size as u64),
         )
     }
+}
 
-    pub async fn metadata(&self) -> io::Result<Metadata> {
-        Ok(Metadata {
-            file_type: FileType::File,
-            file_size: self.size()?,
-        })
-    }
-
+impl File {
     pub(crate) fn read_with_buf(&self, buf: &mut [u8]) -> io::Result<usize> {
         let options = FileSystemReadWriteOptions::new();
         options.set_at(*self.pos.lock().unwrap() as f64);
@@ -105,7 +113,6 @@ impl AsyncRead for File {
         _cx: &mut Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
-
         self.read_with_buf(buf.initialized_mut())?;
 
         Poll::Ready(Ok(()))
