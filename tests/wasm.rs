@@ -44,13 +44,12 @@ async fn test_dir_create_all_nested() {
 #[allow(clippy::uninlined_format_args)]
 async fn test_dir_read_dir_contents() {
     let base_path = "/test_dir_read_dir_contents";
-    // let dir_path = format!("{}/dir_inside", base_path);
+    let dir_path = format!("{}/dir_inside", base_path);
     let file_path = format!("{}/file_inside", base_path);
     let _ = remove_dir_all(base_path).await;
     create_dir_all(base_path).await.unwrap();
 
-    // FIXME:
-    // create_dir(&dir_path).await.unwrap();
+    create_dir(&dir_path).await.unwrap();
     write(&file_path, "some content").await.unwrap();
 
     let mut rd = read_dir(base_path).await.unwrap();
@@ -69,8 +68,7 @@ async fn test_dir_read_dir_contents() {
         entries,
         vec![
             (false, "file_inside".to_string()),
-            // FIXME
-            // (true, "dir_inside".to_string())
+            (true, "dir_inside".to_string())
         ]
     );
     assert!(rd.next_entry().await.unwrap().is_none());

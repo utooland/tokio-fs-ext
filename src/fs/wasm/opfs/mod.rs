@@ -178,14 +178,27 @@ pub(crate) async fn open_dir(
         .map(|c| c.as_os_str().to_string_lossy())
         .collect::<Vec<_>>();
 
-    if components.is_empty() {
+    let total_depth = components.len();
+
+    if total_depth == 0 {
         return Err(io::Error::from(io::ErrorKind::InvalidInput));
     }
 
+    let root = opfs_root().await?;
+
+    if total_depth == 1 {
+        return get_dir_handle(
+            &root,
+            &components[0],
+            matches!(r#type, OpenDirType::Create | OpenDirType::CreateRecursive),
+        )
+        .await;
+    }
+
     let mut dir_handle = get_dir_handle(
-        opfs_root().await?,
+        &root,
         &components[0],
-        matches!(r#type, OpenDirType::Create | OpenDirType::CreateRecursive),
+        matches!(r#type, OpenDirType::CreateRecursive),
     )
     .await?;
 
@@ -193,15 +206,15 @@ pub(crate) async fn open_dir(
 
     for c in components.iter().skip(1) {
         dir_handle = get_dir_handle(
-            dir_handle,
+            &dir_handle,
             c,
-            matches!(r#type, OpenDirType::CreateRecursive),
+            matches!(r#type, OpenDirType::Create | OpenDirType::CreateRecursive),
         )
         .await?;
         depth += 1;
     }
 
-    if depth != components.len() {
+    if depth != total_depth {
         return Err(io::Error::from(io::ErrorKind::NotFound));
     }
 
@@ -209,7 +222,7 @@ pub(crate) async fn open_dir(
 }
 
 async fn get_dir_handle(
-    parent: FileSystemDirectoryHandle,
+    parent: &FileSystemDirectoryHandle,
     path: &str,
     create: bool,
 ) -> io::Result<FileSystemDirectoryHandle> {
