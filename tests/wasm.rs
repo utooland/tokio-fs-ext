@@ -182,18 +182,18 @@ async fn test_file_read_to_end_small() {
 async fn test_file_read_to_end_big() {
     let path = "/test_file_read_to_end/test_file_read_to_end_big.txt";
     let data = "this is for read_to_end ".repeat(10);
-    // let base_dir = "/test_file_read_to_end";
-    // let _ = remove_dir_all(base_dir).await;
-    // create_dir_all(base_dir).await.unwrap();
-    //
-    // write(path, data.as_bytes()).await.unwrap();
+    let base_dir = "/test_file_read_to_end";
+    let _ = remove_dir_all(base_dir).await;
+    create_dir_all(base_dir).await.unwrap();
+
+    write(path, data.as_bytes()).await.unwrap();
     let mut file = OpenOptions::new().read(true).open(path).await.unwrap();
     let mut buffer = vec![0; file.size().unwrap() as usize];
 
     assert!(file.read_to_end(&mut buffer).await.is_ok());
     assert_eq!(str::from_utf8(&buffer).unwrap(), data);
 
-    // let _ = remove_dir_all(base_dir).await;
+    let _ = remove_dir_all(base_dir).await;
 }
 
 #[wasm_bindgen_test]
