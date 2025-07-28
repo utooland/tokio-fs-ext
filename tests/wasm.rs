@@ -158,24 +158,43 @@ async fn test_file_read_to_string() {
     let _ = remove_dir_all(base_dir).await;
 }
 
-//    TODO:adopt to tokio small read: https://github.com/tokio-rs/tokio/blob/tokio-1.46.1/tokio/src/io/util/read_to_end.rs#L77
-// #[wasm_bindgen_test]
-// async fn test_file_read_to_end() {
-//     let path = "/test_file_read_to_end/read_to_end_file.txt";
-//     let data = "this is for read_to_end";
-//     let base_dir = "/test_file_read_to_end";
-//     let _ = remove_dir_all(base_dir).await;
-//     create_dir_all(base_dir).await.unwrap();
-//
-//     write(path, data.as_bytes()).await.unwrap();
-//     let mut file = OpenOptions::new().read(true).open(path).await.unwrap();
-//     let mut buffer = vec![0; file.size().unwrap() as usize];
-//
-//     assert!(file.read_to_end(&mut buffer).await.is_ok());
-//     assert_eq!(buffer, data.as_bytes());
-//
-//     let _ = remove_dir_all(base_dir).await;
-// }
+#[wasm_bindgen_test]
+async fn test_file_read_to_end_small() {
+    let path = "/test_file_read_to_end/test_file_read_to_end_small.txt";
+    let data = "this is for read_to_end ";
+    let base_dir = "/test_file_read_to_end";
+    let _ = remove_dir_all(base_dir).await;
+    create_dir_all(base_dir).await.unwrap();
+
+    write(path, data.as_bytes()).await.unwrap();
+    let mut file = OpenOptions::new().read(true).open(path).await.unwrap();
+    let mut buffer = vec![0; file.size().unwrap() as usize];
+
+    assert!(file.read_to_end(&mut buffer).await.is_ok());
+    assert_eq!(str::from_utf8(&buffer).unwrap(), data);
+
+    let _ = remove_dir_all(base_dir).await;
+}
+
+// FIXME:adopt to tokio small read:
+// https://github.com/tokio-rs/tokio/blob/tokio-1.46.1/tokio/src/io/util/read_to_end.rs#L77:L110
+#[wasm_bindgen_test]
+async fn test_file_read_to_end_big() {
+    let path = "/test_file_read_to_end/test_file_read_to_end_big.txt";
+    let data = "this is for read_to_end ".repeat(10);
+    // let base_dir = "/test_file_read_to_end";
+    // let _ = remove_dir_all(base_dir).await;
+    // create_dir_all(base_dir).await.unwrap();
+    //
+    // write(path, data.as_bytes()).await.unwrap();
+    let mut file = OpenOptions::new().read(true).open(path).await.unwrap();
+    let mut buffer = vec![0; file.size().unwrap() as usize];
+
+    assert!(file.read_to_end(&mut buffer).await.is_ok());
+    assert_eq!(str::from_utf8(&buffer).unwrap(), data);
+
+    // let _ = remove_dir_all(base_dir).await;
+}
 
 #[wasm_bindgen_test]
 async fn test_file_remove() {
@@ -378,4 +397,63 @@ async fn test_metadata_is_file_and_len() {
     assert_eq!(f_metadata.len(), content.len() as u64);
 
     let _ = remove_dir_all(dir_path).await;
+}
+
+// FIXME:
+#[wasm_bindgen_test]
+async fn test_async_seek() {
+    let path = "/test_async_seek/seek_file.txt";
+    let initial_content = "Hello, world!"; // 13 bytes
+    let overwrite_content = "Rust"; // 4 bytes
+    let expected_content = "Hello, Rust!"; // 13 bytes
+    let base_dir = "/test_async_seek";
+    let _ = remove_dir_all(base_dir).await;
+    create_dir_all(base_dir).await.unwrap();
+
+    write(path, initial_content.as_bytes()).await.unwrap();
+    assert_eq!(read(path).await.unwrap(), initial_content.as_bytes());
+
+    let mut file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
+        .await
+        .unwrap();
+
+    // Seek to a specific position (e.g., after "Hello, ")
+    let seek_pos = "Hello, ".len() as u64;
+    let current_pos = file.seek(io::SeekFrom::Start(seek_pos)).await.unwrap();
+    assert_eq!(
+        current_pos, seek_pos,
+        "Seek should move cursor to correct position"
+    );
+
+    // Write new content from that position
+    file.write_all(overwrite_content.as_bytes()).await.unwrap();
+
+    // Seek back to the beginning to read the entire content
+    file.seek(io::SeekFrom::Start(0)).await.unwrap();
+    let mut buffer = vec![0; file.size().unwrap() as usize];
+    file.read_to_end(&mut buffer).await.unwrap();
+
+    // Verify the content
+    assert_eq!(
+        str::from_utf8(&buffer).unwrap(),
+        expected_content,
+        "File content should be updated after seek and write"
+    );
+
+    // Test seeking from current position
+    file.seek(io::SeekFrom::Start(0)).await.unwrap(); // Reset to start
+    file.seek(io::SeekFrom::Current(6)).await.unwrap(); // Move 6 bytes forward
+    let mut partial_buffer = vec![0; 6]; // Read " Rust!"
+    file.read_exact(&mut partial_buffer).await.unwrap();
+    assert_eq!(
+        str::from_utf8(&partial_buffer).unwrap(),
+        ", Rust",
+        "Seeking from current should work"
+    );
+
+    // Clean up
+    let _ = remove_dir_all(base_dir).await;
 }
