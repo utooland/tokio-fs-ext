@@ -25,8 +25,6 @@ pub struct File {
 
 impl File {
     pub async fn create(path: impl AsRef<Path>) -> io::Result<File> {
-        let mut open_options = OpenOptions::new();
-        open_options.create(true);
         open_file(
             path,
             super::opfs::CreateFileMode::Create,
