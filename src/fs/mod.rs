@@ -6,17 +6,23 @@ pub(crate) use wasm::opfs;
 
 #[cfg(all(target_family = "wasm", target_os = "unknown"))]
 pub use wasm::{
-    DirBuilder, DirEntry, File, OpenOptions, ReadDir, canonicalize, copy, create_dir,
+    DirBuilder, DirEntry, File, Metadata, OpenOptions, ReadDir, canonicalize, copy, create_dir,
     create_dir_all, metadata, read, read_dir, read_link, read_to_string, remove_dir,
-    remove_dir_all, remove_file, rename, symlink, try_exists, write,
+    remove_dir_all, remove_file, rename, symlink, symlink_metadata, try_exists, write,
 };
 
 #[cfg(any(target_family = "unix", target_family = "windows"))]
 pub use tokio::fs::{
     DirBuilder, DirEntry, File, OpenOptions, ReadDir, canonicalize, copy, create_dir,
     create_dir_all, metadata, read, read_dir, read_link, read_to_string, remove_dir,
-    remove_dir_all, remove_file, rename, try_exists, write,
+    remove_dir_all, remove_file, rename, symlink_metadata, try_exists, write,
 };
+
+#[cfg(any(target_family = "unix", target_family = "windows"))]
+pub use std::fs::Metadata;
 
 #[cfg(target_family = "unix")]
 pub use tokio::fs::symlink;
+
+#[cfg(target_family = "windows")]
+pub use tokio::fs::{symlink_dir, symlink_file};
