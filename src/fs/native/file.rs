@@ -1,10 +1,12 @@
 use pin_project_lite::pin_project;
 use std::{
+    fs::Metadata,
     io,
     path::Path,
     pin::Pin,
     task::{Context, Poll, ready},
 };
+use tokio::fs::OpenOptions;
 
 pin_project! {
     pub struct File {
@@ -14,10 +16,39 @@ pin_project! {
 }
 
 impl File {
+    pub async fn create(path: impl AsRef<Path>) -> io::Result<File> {
+        Ok(File {
+            inner: tokio::fs::File::create(path).await?,
+        })
+    }
+
+    pub async fn create_new<P: AsRef<Path>>(path: P) -> std::io::Result<File> {
+        Ok(File {
+            inner: tokio::fs::File::create_new(path).await?,
+        })
+    }
+
+    pub async fn metadata(&self) -> io::Result<Metadata> {
+        self.inner.metadata().await
+    }
+
     pub async fn open(path: impl AsRef<Path>) -> io::Result<File> {
         Ok(File {
             inner: tokio::fs::File::open(path).await?,
         })
+    }
+
+    #[must_use]
+    pub fn options() -> OpenOptions {
+        OpenOptions::new()
+    }
+
+    pub async fn sync_all(&self) -> io::Result<()> {
+        self.inner.sync_all().await
+    }
+
+    pub async fn sync_data(&self) -> io::Result<()> {
+        self.inner.sync_data().await
     }
 }
 
