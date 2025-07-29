@@ -25,12 +25,12 @@ impl Default for Flags {
     }
 }
 
-#[derive(Clone, Default, Debug, Copy)]
+#[derive(Clone, Debug, Copy)]
 pub struct OpenOptions(Flags);
 
 impl OpenOptions {
     pub fn new() -> OpenOptions {
-        Default::default()
+        OpenOptions(Flags::READ)
     }
 
     pub fn read(&mut self, read: bool) -> &mut OpenOptions {

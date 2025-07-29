@@ -9,7 +9,7 @@ use tokio_fs_ext::fs::*;
 // Helper function to get a path relative to the current directory
 fn get_test_path(suffix: &str) -> PathBuf {
     let path = std::env::current_dir().unwrap();
-    let base_test_dir = path.join("target").join("tokio_test");
+    let base_test_dir = path.join("target").join("tokio_fs_ext_test");
 
     std::fs::create_dir_all(&base_test_dir).unwrap();
 
