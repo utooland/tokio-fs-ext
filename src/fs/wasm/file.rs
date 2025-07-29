@@ -83,23 +83,23 @@ impl File {
 }
 
 impl File {
-    pub(crate) fn read_with_buf(&self, buf: &mut [u8]) -> io::Result<usize> {
+    pub(crate) fn read_with_buf(&self, buf: &mut [u8]) -> io::Result<u64> {
         let options = FileSystemReadWriteOptions::new();
         options.set_at(*self.pos.lock().unwrap() as f64);
         let size = self
             .sync_access_handle
             .read_with_u8_array_and_options(buf, &options)
-            .map_err(|err| OpfsError::from(err).into_io_err())? as usize;
+            .map_err(|err| OpfsError::from(err).into_io_err())? as u64;
         Ok(size)
     }
 
-    pub(crate) fn write_with_buf(&self, buf: &[u8]) -> io::Result<usize> {
+    pub(crate) fn write_with_buf(&self, buf: &[u8]) -> io::Result<u64> {
         let options = FileSystemReadWriteOptions::new();
         options.set_at(*self.pos.lock().unwrap() as f64);
         let size = self
             .sync_access_handle
             .write_with_u8_array_and_options(buf.as_ref(), &options)
-            .map_err(|err| OpfsError::from(err).into_io_err())? as usize;
+            .map_err(|err| OpfsError::from(err).into_io_err())? as u64;
         Ok(size)
     }
 
@@ -127,7 +127,10 @@ impl AsyncRead for File {
         buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
         // Must ensure the write been filled with real size of file
-        self.read_with_buf(buf.initialized_mut())?;
+        let offset = self.read_with_buf(buf.initialized_mut())?;
+
+        let mut pos = self.pos.lock().unwrap();
+        *pos += offset;
 
         Poll::Ready(Ok(()))
     }
@@ -139,9 +142,12 @@ impl AsyncWrite for File {
         _cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<Result<usize, io::Error>> {
-        let size = self.write_with_buf(buf)?;
+        let offset = self.write_with_buf(buf)?;
 
-        Poll::Ready(Ok(size))
+        let mut pos = self.pos.lock().unwrap();
+        *pos += offset;
+
+        Poll::Ready(Ok(offset as usize))
     }
 
     fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
