@@ -1,6 +1,6 @@
 use bitflags::bitflags;
+use futures::io::AsyncSeekExt;
 use std::{io, path::Path};
-use tokio::io::AsyncSeekExt;
 
 use crate::fs::{
     File,

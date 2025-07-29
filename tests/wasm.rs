@@ -1,7 +1,7 @@
 #![cfg(all(target_family = "wasm", target_os = "unknown"))]
 
+use futures::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use std::io;
-use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use tokio_fs_ext::fs::*;
 
 use wasm_bindgen_test::*;
@@ -168,7 +168,7 @@ async fn test_file_read_to_end_small() {
 
     write(path, data.as_bytes()).await.unwrap();
     let mut file = OpenOptions::new().read(true).open(path).await.unwrap();
-    let mut buffer = vec![0; file.size().unwrap() as usize];
+    let mut buffer = vec![];
 
     assert!(file.read_to_end(&mut buffer).await.is_ok());
     assert_eq!(str::from_utf8(&buffer).unwrap(), data);
@@ -176,25 +176,23 @@ async fn test_file_read_to_end_small() {
     let _ = remove_dir_all(base_dir).await;
 }
 
-// FIXME:adopt to tokio small read:
-// https://github.com/tokio-rs/tokio/blob/tokio-1.46.1/tokio/src/io/util/read_to_end.rs#L77:L110
-// #[wasm_bindgen_test]
-// async fn test_file_read_to_end_big() {
-//     let path = "/test_file_read_to_end/test_file_read_to_end_big.txt";
-//     let data = "this is for read_to_end ".repeat(10);
-//     let base_dir = "/test_file_read_to_end";
-//     let _ = remove_dir_all(base_dir).await;
-//     create_dir_all(base_dir).await.unwrap();
-//
-//     write(path, data.as_bytes()).await.unwrap();
-//     let mut file = OpenOptions::new().read(true).open(path).await.unwrap();
-//     let mut buffer = vec![0; file.size().unwrap() as usize];
-//
-//     assert!(file.read_to_end(&mut buffer).await.is_ok());
-//     assert_eq!(str::from_utf8(&buffer).unwrap(), data);
-//
-//     let _ = remove_dir_all(base_dir).await;
-// }
+#[wasm_bindgen_test]
+async fn test_file_read_to_end_big() {
+    let path = "/test_file_read_to_end/test_file_read_to_end_big.txt";
+    let data = "this is for read_to_end ".repeat(10);
+    let base_dir = "/test_file_read_to_end";
+    let _ = remove_dir_all(base_dir).await;
+    create_dir_all(base_dir).await.unwrap();
+
+    write(path, data.as_bytes()).await.unwrap();
+    let mut file = OpenOptions::new().read(true).open(path).await.unwrap();
+    let mut buffer = vec![];
+
+    assert!(file.read_to_end(&mut buffer).await.is_ok());
+    assert_eq!(str::from_utf8(&buffer).unwrap(), data);
+
+    let _ = remove_dir_all(base_dir).await;
+}
 
 #[wasm_bindgen_test]
 async fn test_file_remove() {
@@ -433,7 +431,7 @@ async fn test_async_seek() {
 
     // Seek back to the beginning to read the entire content
     file.seek(io::SeekFrom::Start(0)).await.unwrap();
-    let mut buffer = vec![0; file.size().unwrap() as usize];
+    let mut buffer = vec![];
     file.read_to_end(&mut buffer).await.unwrap();
 
     // Verify the content
@@ -445,7 +443,7 @@ async fn test_async_seek() {
 
     // Test seeking from current position
     file.seek(io::SeekFrom::Start(0)).await.unwrap(); // Reset to start
-    file.seek(io::SeekFrom::Current(7)).await.unwrap(); // Move 6 bytes forward
+    file.seek(io::SeekFrom::Current(6)).await.unwrap(); // Move 6 bytes forward
     let mut partial_buffer = vec![0; 6]; // Read " Rust!"
     file.read_exact(&mut partial_buffer).await.unwrap();
     assert_eq!(

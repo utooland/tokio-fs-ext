@@ -6,7 +6,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use tokio::io::{AsyncRead, AsyncSeek, AsyncWrite, ReadBuf};
+use futures::io::{AsyncRead, AsyncSeek, AsyncWrite};
 use web_sys::{FileSystemReadWriteOptions, FileSystemSyncAccessHandle};
 
 use crate::fs::{
@@ -124,15 +124,14 @@ impl AsyncRead for File {
     fn poll_read(
         self: Pin<&mut Self>,
         _cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<io::Result<()>> {
-        // Must ensure the write been filled with real size of file
-        let offset = self.read_with_buf(buf.initialized_mut())?;
+        buf: &mut [u8],
+    ) -> Poll<io::Result<usize>> {
+        let size = self.read_with_buf(buf)?;
 
         let mut pos = self.pos.lock().unwrap();
-        *pos += offset;
+        *pos += size;
 
-        Poll::Ready(Ok(()))
+        Poll::Ready(Ok(size as usize))
     }
 }
 
@@ -155,14 +154,18 @@ impl AsyncWrite for File {
         Poll::Ready(Ok(()))
     }
 
-    fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
+    fn poll_close(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
         self.close();
         Poll::Ready(Ok(()))
     }
 }
 
 impl AsyncSeek for File {
-    fn start_seek(self: Pin<&mut Self>, position: SeekFrom) -> io::Result<()> {
+    fn poll_seek(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        position: SeekFrom,
+    ) -> Poll<io::Result<u64>> {
         let mut pos = self.pos.lock().unwrap();
         match position {
             SeekFrom::Start(offset) => {
@@ -180,10 +183,6 @@ impl AsyncSeek for File {
                     .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
             }
         }
-        Ok(())
-    }
-
-    fn poll_complete(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<u64>> {
-        Poll::Ready(Ok(*self.pos.lock().unwrap()))
+        Poll::Ready(Ok(*pos))
     }
 }

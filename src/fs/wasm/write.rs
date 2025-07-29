@@ -1,6 +1,6 @@
 use std::{io, path::Path};
 
-use tokio::io::AsyncSeekExt;
+use futures::io::AsyncSeekExt;
 
 use crate::fs::OpenOptions;
 
