@@ -104,6 +104,12 @@ impl OpenOptions {
     }
 }
 
+impl Default for OpenOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl From<&OpenOptions> for CreateFileMode {
     fn from(options: &OpenOptions) -> Self {
         if options.0.contains(Flags::CREATE) {

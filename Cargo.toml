@@ -18,11 +18,11 @@ cfg-if = "1.0.1"
 
 
 [target.'cfg(not(all(target_family = "wasm", target_os = "unknown")))'.dependencies]
+pin-project-lite = "0.2.16"
 tokio = { version = "1.46.1", default-features = false, features = [
   "fs",
   "sync",
 ] }
-pin-project-lite = "0.2.16"
 
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dependencies]
 js-sys = "0.3.77"
@@ -55,6 +55,9 @@ bitflags = "2.9.1"
 
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dev-dependencies]
 wasm-bindgen-test = "0.3.50"
+
+[target.'cfg(not(all(target_family = "wasm", target_os = "unknown")))'.dev-dependencies]
+tokio = { version = "1.46.1", features = ["macros", "test-util"] }
 
 [package.metadata.wasm-pack.profile.dev.wasm-bindgen]
 dwarf-debug-info = true

@@ -4,18 +4,18 @@ cfg_if! {
     if #[cfg(all(target_family = "wasm", target_os = "unknown"))] {
         mod wasm;
         pub(crate) use wasm::opfs;
-        pub use wasm::File;
+        pub use wasm::{File, OpenOptions};
         pub use wasm::{
-            DirBuilder, DirEntry, OpenOptions, ReadDir, canonicalize, copy, create_dir, create_dir_all,
+            DirBuilder, DirEntry, ReadDir, canonicalize, copy, create_dir, create_dir_all,
             metadata, read, read_dir, read_link, read_to_string, remove_dir, remove_dir_all, remove_file,
             rename, symlink_metadata, try_exists, write,
         };
         pub use wasm::{Metadata, symlink};
     } else if #[cfg(any(target_family = "unix", target_family = "windows"))] {
         mod native;
-        pub use native::File;
+        pub use native::{File, OpenOptions};
         pub use tokio::fs::{
-            DirBuilder, DirEntry, OpenOptions, ReadDir, canonicalize, copy, create_dir, create_dir_all,
+            DirBuilder, DirEntry, ReadDir, canonicalize, copy, create_dir, create_dir_all,
             metadata, read, read_dir, read_link, read_to_string, remove_dir, remove_dir_all, remove_file,
             rename, symlink_metadata, try_exists, write,
         };

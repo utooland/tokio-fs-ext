@@ -6,12 +6,14 @@ use std::{
     pin::Pin,
     task::{Context, Poll, ready},
 };
-use tokio::fs::OpenOptions;
+use tokio::{fs::OpenOptions, io::AsyncSeek};
 
 pin_project! {
+    #[derive(Debug)]
     pub struct File {
         #[pin]
-        inner: tokio::fs::File,
+        pub(crate) inner: tokio::fs::File,
+        pub(crate) seek_pos: Option<io::SeekFrom>,
     }
 }
 
@@ -19,12 +21,14 @@ impl File {
     pub async fn create(path: impl AsRef<Path>) -> io::Result<File> {
         Ok(File {
             inner: tokio::fs::File::create(path).await?,
+            seek_pos: None,
         })
     }
 
     pub async fn create_new<P: AsRef<Path>>(path: P) -> std::io::Result<File> {
         Ok(File {
             inner: tokio::fs::File::create_new(path).await?,
+            seek_pos: None,
         })
     }
 
@@ -35,6 +39,7 @@ impl File {
     pub async fn open(path: impl AsRef<Path>) -> io::Result<File> {
         Ok(File {
             inner: tokio::fs::File::open(path).await?,
+            seek_pos: None,
         })
     }
 
@@ -83,5 +88,22 @@ impl futures::io::AsyncWrite for File {
 
     fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         tokio::io::AsyncWrite::poll_shutdown(self.project().inner, cx)
+    }
+}
+
+impl futures::io::AsyncSeek for File {
+    fn poll_seek(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        pos: io::SeekFrom,
+    ) -> Poll<io::Result<u64>> {
+        if self.seek_pos != Some(pos) {
+            ready!(self.as_mut().project().inner.poll_complete(cx))?;
+            self.as_mut().project().inner.start_seek(pos)?;
+            *self.as_mut().project().seek_pos = Some(pos);
+        }
+        let res = ready!(self.as_mut().project().inner.poll_complete(cx));
+        *self.as_mut().project().seek_pos = None;
+        Poll::Ready(res)
     }
 }

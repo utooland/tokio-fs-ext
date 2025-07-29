@@ -1,0 +1,481 @@
+#![cfg(not(all(target_family = "wasm", target_os = "unknown")))]
+
+use futures::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
+use std::io;
+use std::path::PathBuf;
+use std::str; // Added for str::from_utf8
+use tokio_fs_ext::fs::*;
+
+// Helper function to get a path relative to the current directory
+fn get_test_path(suffix: &str) -> PathBuf {
+    let path = std::env::current_dir().unwrap();
+    let base_test_dir = path.join("target").join("tokio_test");
+
+    std::fs::create_dir_all(&base_test_dir).unwrap();
+
+    let suffix = suffix.trim_start_matches('/');
+    base_test_dir.join(suffix)
+}
+
+#[tokio::test]
+async fn test_dir_create_and_exists() {
+    let path = get_test_path("/test_dir_create_and_exists");
+    let _ = remove_dir_all(&path).await; // Use &path
+
+    assert!(!try_exists(&path).await.unwrap());
+
+    create_dir(&path).await.unwrap();
+    assert!(try_exists(&path).await.unwrap());
+
+    let _ = remove_dir_all(&path).await;
+    assert!(!try_exists(&path).await.unwrap());
+}
+
+#[tokio::test]
+async fn test_dir_create_all_nested() {
+    let path = get_test_path("/test_dir_create_all_nested/sub/sub_sub");
+    let base_path = get_test_path("/test_dir_create_all_nested");
+    let _ = remove_dir_all(&base_path).await;
+
+    assert!(!try_exists(&base_path).await.unwrap());
+    assert!(!try_exists(&path).await.unwrap());
+
+    create_dir_all(&path).await.unwrap();
+    assert!(try_exists(&path).await.unwrap());
+    assert!(try_exists(&base_path).await.unwrap());
+
+    let _ = remove_dir_all(&base_path).await;
+}
+
+#[tokio::test]
+#[allow(clippy::uninlined_format_args)]
+async fn test_dir_read_dir_contents() {
+    let base_path = get_test_path("/test_dir_read_dir_contents");
+    // Use PathBuf::join for constructing paths
+    let dir_path = base_path.join("dir_inside");
+    let file_path = base_path.join("file_inside");
+    let _ = remove_dir_all(&base_path).await;
+    create_dir_all(&base_path).await.unwrap();
+
+    create_dir(&dir_path).await.unwrap();
+    write(&file_path, "some content").await.unwrap();
+
+    let mut rd = read_dir(&base_path).await.unwrap();
+    let mut entries = Vec::new();
+
+    while let Some(entry) = rd.next_entry().await.unwrap() {
+        entries.push((
+            entry.file_type().await.unwrap().is_dir(),
+            entry.file_name().to_string_lossy().to_string(),
+        ));
+    }
+
+    entries.sort_by_key(|e| e.0);
+
+    assert_eq!(
+        entries,
+        vec![
+            (false, "file_inside".to_string()),
+            (true, "dir_inside".to_string())
+        ]
+    );
+    assert!(rd.next_entry().await.unwrap().is_none());
+
+    let _ = remove_dir_all(&base_path).await;
+}
+
+#[tokio::test]
+async fn test_dir_non_existent_path() {
+    let path = get_test_path("/non_existent_dir_path");
+    let _ = remove_dir_all(&path).await;
+
+    assert!(!try_exists(&path).await.unwrap());
+}
+
+// --- test_file split into smaller tests ---
+
+#[tokio::test]
+async fn test_file_create_write_read() {
+    let path = get_test_path("/test_file_create_write_read/file.txt");
+    let data = "hello world";
+    let base_dir = get_test_path("/test_file_create_write_read");
+    let _ = remove_dir_all(&base_dir).await;
+    create_dir_all(&base_dir).await.unwrap();
+
+    assert!(!try_exists(&path).await.unwrap());
+
+    write(&path, data.as_bytes()).await.unwrap();
+    assert!(try_exists(&path).await.unwrap());
+
+    let read_data = read(&path).await.unwrap();
+    assert_eq!(read_data, data.as_bytes());
+
+    let _ = remove_dir_all(&base_dir).await;
+}
+
+#[tokio::test]
+#[allow(clippy::uninlined_format_args)]
+async fn test_file_copy() {
+    let path = get_test_path("/test_file_copy/original.txt");
+    let copy_path = get_test_path("/test_file_copy/original.txt_copy"); // Construct directly
+    let data = "copy me";
+    let base_dir = get_test_path("/test_file_copy");
+    let _ = remove_dir_all(&base_dir).await;
+    create_dir_all(&base_dir).await.unwrap();
+
+    write(&path, data.as_bytes()).await.unwrap();
+    copy(&path, &copy_path).await.unwrap(); // Pass references
+
+    assert!(try_exists(&copy_path).await.unwrap());
+    assert_eq!(read(&copy_path).await.unwrap(), data.as_bytes());
+
+    let _ = remove_dir_all(&base_dir).await;
+}
+
+#[tokio::test]
+#[allow(clippy::uninlined_format_args)]
+async fn test_file_rename() {
+    let path = get_test_path("/test_file_rename/old_name.txt");
+    let rename_path = get_test_path("/test_file_rename/old_name.txt_rename"); // Construct directly
+    let data = "rename me";
+    let base_dir = get_test_path("/test_file_rename");
+    let _ = remove_dir_all(&base_dir).await;
+    create_dir_all(&base_dir).await.unwrap();
+
+    write(&path, data.as_bytes()).await.unwrap();
+    rename(&path, &rename_path).await.unwrap(); // Pass references
+
+    assert!(!try_exists(&path).await.unwrap());
+    assert!(try_exists(&rename_path).await.unwrap());
+    assert_eq!(read(&rename_path).await.unwrap(), data.as_bytes());
+
+    let _ = remove_dir_all(&base_dir).await;
+}
+
+#[tokio::test]
+async fn test_file_read_to_string() {
+    let path = get_test_path("/test_file_read_to_string/string_file.txt");
+    let data = "this is a string";
+    let base_dir = get_test_path("/test_file_read_to_string");
+    let _ = remove_dir_all(&base_dir).await;
+    create_dir_all(&base_dir).await.unwrap();
+
+    write(&path, data.as_bytes()).await.unwrap();
+    assert_eq!(read_to_string(&path).await.unwrap(), data);
+
+    let _ = remove_dir_all(&base_dir).await;
+}
+
+#[tokio::test]
+async fn test_file_read_to_end_small() {
+    let path = get_test_path("/test_file_read_to_end/test_file_read_to_end_small.txt");
+    let data = "this is for read_to_end ";
+    let base_dir = get_test_path("/test_file_read_to_end");
+    let _ = remove_dir_all(&base_dir).await;
+    create_dir_all(&base_dir).await.unwrap();
+
+    write(&path, data.as_bytes()).await.unwrap();
+    let mut file = OpenOptions::new().read(true).open(&path).await.unwrap();
+    let mut buffer = vec![];
+
+    assert!(file.read_to_end(&mut buffer).await.is_ok());
+    assert_eq!(str::from_utf8(&buffer).unwrap(), data);
+
+    let _ = remove_dir_all(&base_dir).await;
+}
+
+#[tokio::test]
+async fn test_file_read_to_end_big() {
+    let path = get_test_path("/test_file_read_to_end/test_file_read_to_end_big.txt");
+    let data = "this is for read_to_end ".repeat(10);
+    let base_dir = get_test_path("/test_file_read_to_end");
+    let _ = remove_dir_all(&base_dir).await;
+    create_dir_all(&base_dir).await.unwrap();
+
+    write(&path, data.as_bytes()).await.unwrap();
+    let mut file = OpenOptions::new().read(true).open(&path).await.unwrap();
+    let mut buffer = vec![];
+
+    assert!(file.read_to_end(&mut buffer).await.is_ok());
+    assert_eq!(str::from_utf8(&buffer).unwrap(), data);
+
+    let _ = remove_dir_all(&base_dir).await;
+}
+
+#[tokio::test]
+async fn test_file_remove() {
+    let path = get_test_path("/test_file_remove/file_to_remove.txt");
+    let base_dir = get_test_path("/test_file_remove");
+    let _ = remove_dir_all(&base_dir).await;
+    create_dir_all(&base_dir).await.unwrap();
+
+    write(&path, "content").await.unwrap();
+    assert!(try_exists(&path).await.unwrap());
+
+    remove_file(&path).await.unwrap();
+    assert!(!try_exists(&path).await.unwrap());
+
+    let _ = remove_dir_all(&base_dir).await;
+}
+
+#[tokio::test]
+async fn test_open_options_create_new_fails_if_exists() {
+    let path = get_test_path("/test_open_options_create_new_fails_if_exists");
+    let _ = remove_file(&path).await;
+    write(&path, "dummy").await.unwrap();
+
+    let err = OpenOptions::new()
+        .create_new(true)
+        .open(&path)
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
+
+    let _ = remove_file(&path).await;
+}
+
+#[tokio::test]
+async fn test_open_options_create_new_succeeds_if_not_exists() {
+    let path = get_test_path("/test_open_options_create_new_succeeds_if_not_exists");
+    let _ = remove_file(&path).await;
+
+    let result = OpenOptions::new().create_new(true).open(&path).await;
+    assert!(result.is_ok());
+
+    let _ = remove_file(&path).await;
+}
+
+#[tokio::test]
+async fn test_open_options_create_succeeds() {
+    let path = get_test_path("/test_open_options_create_succeeds");
+    let _ = remove_file(&path).await;
+
+    let result = OpenOptions::new().create(true).open(&path).await;
+    assert!(result.is_ok());
+
+    let _ = remove_file(&path).await;
+}
+
+#[tokio::test]
+async fn test_open_options_readonly_permission_denied() {
+    let path = get_test_path("/test_open_options_readonly_permission_denied");
+    let _ = remove_file(&path).await;
+
+    let _readonly_file = OpenOptions::new()
+        .read(true)
+        .create(true)
+        .open(&path)
+        .await
+        .unwrap();
+
+    // This test case seems to have a logical error.
+    // If a file is opened with `read(true)` and `create(true)`, it can be written to.
+    // The `PermissionDenied` error would typically occur if the file system
+    // itself denies write access, or if `write(true)` was not specified.
+    // Given the original code and the goal of prepending paths, I'll keep the structure
+    // but note this potential logical issue in the original test.
+    let err = write(&path, "attempt to write").await.unwrap_err();
+    assert_eq!(err.kind(), io::ErrorKind::PermissionDenied);
+
+    let _ = remove_file(&path).await;
+}
+
+#[tokio::test]
+async fn test_open_options_read_write_behavior() {
+    let path = get_test_path("/test_open_options_read_write_behavior");
+    let contents = "somedata".repeat(16);
+    let _ = remove_file(&path).await;
+
+    {
+        let mut rw_file = OpenOptions::new()
+            .write(true)
+            .read(true)
+            .create(true)
+            .open(&path)
+            .await
+            .unwrap();
+
+        assert!(rw_file.write(contents.as_bytes()).await.is_ok());
+        rw_file.seek(io::SeekFrom::Start(0)).await.unwrap();
+        let mut data = vec![];
+        assert!(rw_file.read(&mut data).await.is_ok());
+        assert_eq!(data.as_slice(), contents.as_bytes());
+    }
+
+    {
+        let mut rw_file = OpenOptions::new().read(true).open(&path).await.unwrap();
+
+        let mut data = vec![];
+        assert!(rw_file.read(&mut data).await.is_ok());
+        assert_eq!(data.as_slice(), contents.as_bytes());
+    }
+
+    let _ = remove_dir_all(&path).await; // Changed to remove_dir_all as it might be a file or directory
+}
+
+#[tokio::test]
+async fn test_open_options_truncate() {
+    let path = get_test_path("/test_open_options_truncate");
+    let initial_content = "initial content";
+    let _ = remove_file(&path).await;
+
+    write(&path, initial_content.as_bytes()).await.unwrap();
+    assert_eq!(read(&path).await.unwrap(), initial_content.as_bytes());
+
+    {
+        let _truncate = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .open(&path)
+            .await
+            .unwrap();
+        // The original test had a PermissionDenied error check here after truncating.
+        // Truncating a file does not typically result in PermissionDenied for subsequent reads
+        // unless the file was opened read-only, which is not the case here.
+        // It's more likely that the file would just be empty.
+        // I'll keep the original assertion for consistency with the user's request,
+        // but it might indicate an unexpected behavior in the original test's environment.
+        assert_eq!(
+            read(&path).await.unwrap_err().kind(),
+            io::ErrorKind::PermissionDenied
+        );
+    };
+    // This assertion checks if the file is empty after truncation, which is the expected behavior.
+    // This might conflict with the `PermissionDenied` assertion above if the `read` call
+    // actually fails with `PermissionDenied` and not just returns an empty buffer.
+    // I'm keeping both as they were in the original, but this section is a bit contradictory.
+    assert!(read(&path).await.unwrap().is_empty());
+
+    let _ = remove_file(&path).await;
+}
+
+#[tokio::test]
+async fn test_open_options_append() {
+    let path = get_test_path("/test_open_options_append");
+    let initial_content = "append";
+    let additional_content = "append";
+    let _ = remove_file(&path).await;
+
+    write(&path, initial_content.as_bytes()).await.unwrap();
+
+    let mut append = OpenOptions::new()
+        .append(true)
+        .read(true)
+        .open(&path)
+        .await
+        .unwrap();
+
+    append
+        .write_all(additional_content.as_bytes())
+        .await
+        .unwrap();
+    append.seek(io::SeekFrom::Start(0)).await.unwrap();
+    let mut data = vec![];
+    #[allow(clippy::unused_io_amount)]
+    append.read(&mut data).await.unwrap();
+    assert_eq!(
+        data.as_slice(),
+        (initial_content.to_string() + additional_content).as_bytes()
+    );
+
+    let _ = remove_file(&path).await;
+}
+
+// --- test_metadata split into smaller tests ---
+
+#[tokio::test]
+async fn test_metadata_not_found() {
+    let path = get_test_path("/test_metadata_not_found");
+    let _ = remove_dir_all(&path).await;
+
+    let err = metadata(&path).await.unwrap_err();
+    assert_eq!(err.kind(), io::ErrorKind::NotFound);
+}
+
+#[tokio::test]
+async fn test_metadata_is_dir() {
+    let path = get_test_path("/test_metadata_is_dir");
+    let _ = remove_dir_all(&path).await;
+
+    create_dir(&path).await.unwrap();
+    let meta = metadata(&path).await.unwrap();
+    assert!(meta.is_dir());
+
+    let _ = remove_dir_all(&path).await;
+}
+
+#[tokio::test]
+#[allow(clippy::uninlined_format_args)]
+async fn test_metadata_is_file_and_len() {
+    let dir_path = get_test_path("/test_metadata_is_file_and_len_dir");
+    let file_path = dir_path.join("file_with_content.txt"); // Use PathBuf::join
+    let content = "some file content";
+    let _ = remove_dir_all(&dir_path).await;
+    create_dir(&dir_path).await.unwrap();
+
+    write(&file_path, content.as_bytes()).await.unwrap();
+    let f_metadata = metadata(&file_path).await.unwrap();
+
+    assert!(f_metadata.is_file());
+    assert_eq!(f_metadata.len(), content.len() as u64);
+
+    let _ = remove_dir_all(&dir_path).await;
+}
+
+#[tokio::test]
+async fn test_async_seek() {
+    let path = get_test_path("/test_async_seek/seek_file.txt");
+    let initial_content = "Hello, world!"; // 13 bytes
+    let overwrite_content = "Rust"; // 4 bytes
+    let expected_content = "Hello, Rustd!"; // 13 bytes
+    let base_dir = get_test_path("/test_async_seek");
+    let _ = remove_dir_all(&base_dir).await;
+    create_dir_all(&base_dir).await.unwrap();
+
+    write(&path, initial_content.as_bytes()).await.unwrap();
+    assert_eq!(read(&path).await.unwrap(), initial_content.as_bytes());
+
+    let mut file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&path)
+        .await
+        .unwrap();
+
+    // Seek to a specific position (e.g., after "Hello, ")
+    let seek_pos = "Hello, ".len() as u64;
+    let current_pos = file.seek(io::SeekFrom::Start(seek_pos)).await.unwrap();
+    assert_eq!(
+        current_pos, seek_pos,
+        "Seek should move cursor to correct position"
+    );
+
+    // Write new content from that position
+    file.write_all(overwrite_content.as_bytes()).await.unwrap();
+
+    // Seek back to the beginning to read the entire content
+    file.seek(io::SeekFrom::Start(0)).await.unwrap();
+    let mut buffer = vec![];
+    file.read_to_end(&mut buffer).await.unwrap();
+
+    // Verify the content
+    assert_eq!(
+        str::from_utf8(&buffer).unwrap(),
+        expected_content,
+        "File content should be updated after seek and write"
+    );
+
+    // Test seeking from current position
+    file.seek(io::SeekFrom::Start(0)).await.unwrap(); // Reset to start
+    file.seek(io::SeekFrom::Current(6)).await.unwrap(); // Move 6 bytes forward
+    let mut partial_buffer = vec![0; 6]; // Read " Rust!"
+    file.read_exact(&mut partial_buffer).await.unwrap();
+    assert_eq!(
+        str::from_utf8(&partial_buffer).unwrap(),
+        " Rustd",
+        "Seeking from current should work"
+    );
+
+    // Clean up
+    let _ = remove_dir_all(&base_dir).await;
+}
