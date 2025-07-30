@@ -218,6 +218,7 @@ async fn test_open_options_create_new_fails_if_exists() {
 
     let err = OpenOptions::new()
         .create_new(true)
+        .write(true)
         .open(path)
         .await
         .unwrap_err();
@@ -231,7 +232,11 @@ async fn test_open_options_create_new_succeeds_if_not_exists() {
     let path = "/test_open_options_create_new_succeeds_if_not_exists";
     let _ = remove_file(path).await;
 
-    let result = OpenOptions::new().create_new(true).open(path).await;
+    let result = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(path)
+        .await;
     assert!(result.is_ok());
 
     let _ = remove_file(path).await;
@@ -242,7 +247,7 @@ async fn test_open_options_create_succeeds() {
     let path = "/test_open_options_create_succeeds";
     let _ = remove_file(path).await;
 
-    let result = OpenOptions::new().create(true).open(path).await;
+    let result = OpenOptions::new().create(true).write(true).open(path).await;
     assert!(result.is_ok());
 
     let _ = remove_file(path).await;
@@ -255,6 +260,7 @@ async fn test_open_options_readonly_permission_denied() {
 
     let _readonly_file = OpenOptions::new()
         .read(true)
+        .write(true)
         .create(true)
         .open(path)
         .await
@@ -312,6 +318,7 @@ async fn test_open_options_truncate() {
         let _truncate = OpenOptions::new()
             .create(true)
             .truncate(true)
+            .write(true)
             .open(path)
             .await
             .unwrap();
@@ -337,6 +344,7 @@ async fn test_open_options_append() {
     let mut append = OpenOptions::new()
         .append(true)
         .read(true)
+        .write(true)
         .open(path)
         .await
         .unwrap();

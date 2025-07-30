@@ -88,19 +88,28 @@ impl OpenOptions {
     }
 
     pub async fn open(&self, path: impl AsRef<Path>) -> io::Result<File> {
-        let mut file = open_file(
-            path,
-            self.into(),
-            !(self.0 & (Flags::TRUNCATE | Flags::CREATE)).is_empty(),
-            self.into(),
-        )
-        .await?;
+        if self.is_invalid() {
+            return Err(io::Error::from(io::ErrorKind::InvalidInput));
+        }
+
+        let mut file = open_file(path, self.into(), self.is_truncate(), self.into()).await?;
 
         if self.0.contains(Flags::APPEND) {
             file.seek(io::SeekFrom::End(0)).await?;
         }
 
         Ok(file)
+    }
+}
+
+impl OpenOptions {
+    fn is_invalid(&self) -> bool {
+        !(self.0 & (Flags::CREATE | Flags::CREATE_NEW | Flags::TRUNCATE | Flags::APPEND)).is_empty()
+            && !self.0.contains(Flags::WRITE)
+    }
+
+    fn is_truncate(&self) -> bool {
+        !(self.0 & (Flags::TRUNCATE | Flags::CREATE)).is_empty()
     }
 }
 
