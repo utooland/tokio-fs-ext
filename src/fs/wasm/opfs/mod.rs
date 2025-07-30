@@ -77,6 +77,7 @@ impl From<OpfsError> for io::Error {
 pub enum SyncAccessMode {
     Readonly = "read-only",
     Readwrite = "readwrite",
+    // https://developer.mozilla.org/en-US/docs/Web/API/FileSystemFileHandle/createSyncAccessHandle#readwrite-unsafe
     ReadwriteUnsafe = "readwrite-unsafe",
 }
 
@@ -156,7 +157,7 @@ async fn get_file_handle(
 ) -> Result<FileSystemSyncAccessHandle, io::Error> {
     let option = FileSystemGetFileOptions::new();
     option.set_create(create);
-    let file_handle = JsFuture::from(dir_entry.get_file_handle_with_options(&name, &option))
+    let file_handle = JsFuture::from(dir_entry.get_file_handle_with_options(name, &option))
         .await
         .map_err(|err| OpfsError::from(err).into_io_err())?
         .dyn_into::<FileSystemFileHandle>()

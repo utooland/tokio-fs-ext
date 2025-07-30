@@ -133,10 +133,10 @@ impl From<&OpenOptions> for CreateFileMode {
 
 impl From<&OpenOptions> for SyncAccessMode {
     fn from(options: &OpenOptions) -> Self {
-        if (options.0 & (Flags::APPEND | Flags::WRITE | Flags::TRUNCATE)).is_empty() {
+        if (options.0 & Flags::WRITE).is_empty() {
             SyncAccessMode::Readonly
         } else {
-            SyncAccessMode::Readwrite
+            SyncAccessMode::ReadwriteUnsafe
         }
     }
 }

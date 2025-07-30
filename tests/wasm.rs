@@ -322,6 +322,7 @@ async fn test_open_options_truncate() {
             .open(path)
             .await
             .unwrap();
+        // https://developer.mozilla.org/en-US/docs/Web/API/FileSystemFileHandle/createSyncAccessHandle#readwrite
         assert_eq!(
             read(path).await.unwrap_err().kind(),
             io::ErrorKind::PermissionDenied

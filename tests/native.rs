@@ -1,3 +1,4 @@
+#![feature(io_error_uncategorized)]
 #![cfg(not(all(target_family = "wasm", target_os = "unknown")))]
 
 use futures::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
@@ -277,12 +278,15 @@ async fn test_open_options_readonly_permission_denied() {
             .await
             .unwrap();
     }
-    let _readonly_file = OpenOptions::new().read(true).open(&path).await.unwrap();
+    let mut readonly_file = OpenOptions::new().read(true).open(&path).await.unwrap();
+    readonly_file
+        .write_all("try write failed".as_bytes())
+        .await
+        .unwrap();
 
-    // FIXME:
-    // let err = write(&path, "attempt to write").await.unwrap_err();
-    // FIXME:
-    // assert_eq!(err.kind(), io::ErrorKind::PermissionDenied);
+    let err = readonly_file.flush().await.unwrap_err();
+
+    assert_eq!(err.kind(), io::ErrorKind::Uncategorized);
 
     let _ = remove_file(&path).await;
 }
@@ -305,18 +309,16 @@ async fn test_open_options_read_write_behavior() {
         assert!(rw_file.write(contents.as_bytes()).await.is_ok());
         rw_file.seek(io::SeekFrom::Start(0)).await.unwrap();
         let mut data = vec![];
-        assert!(rw_file.read(&mut data).await.is_ok());
-        // FIXME:
-        // assert_eq!(data.as_slice(), contents.as_bytes());
+        assert!(rw_file.read_to_end(&mut data).await.is_ok());
+        assert_eq!(data.as_slice(), contents.as_bytes());
     }
 
     {
         let mut rw_file = OpenOptions::new().read(true).open(&path).await.unwrap();
 
         let mut data = vec![];
-        assert!(rw_file.read(&mut data).await.is_ok());
-        // FIXME:
-        // assert_eq!(data.as_slice(), contents.as_bytes());
+        assert!(rw_file.read_to_end(&mut data).await.is_ok());
+        assert_eq!(data.as_slice(), contents.as_bytes());
     }
 
     let _ = remove_dir_all(&path).await; // Changed to remove_dir_all as it might be a file or directory
@@ -339,11 +341,7 @@ async fn test_open_options_truncate() {
             .open(&path)
             .await
             .unwrap();
-        // FIXME:
-        // assert_eq!(
-        //     read(&path).await.unwrap_err().kind(),
-        //     io::ErrorKind::PermissionDenied
-        // );
+      
     };
     assert!(read(&path).await.unwrap().is_empty());
 
