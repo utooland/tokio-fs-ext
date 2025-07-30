@@ -23,7 +23,7 @@ This library aims to bridge that gap by offering an API that is compatible with 
 ```rust
 use tokio_fs_ext as fs;
 use std::io;
-use futures::io::{AsyncReadExt, AsyncWrite};
+use futures::io::AsyncReadExt;
 
 async fn foo() -> io::Result<()> {
     fs::write("hello.txt", "Hello").await?;
