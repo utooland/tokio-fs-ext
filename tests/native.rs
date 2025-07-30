@@ -341,7 +341,6 @@ async fn test_open_options_truncate() {
             .open(&path)
             .await
             .unwrap();
-      
     };
     assert!(read(&path).await.unwrap().is_empty());
 
@@ -370,9 +369,8 @@ async fn test_open_options_append() {
         .await
         .unwrap();
     append.seek(io::SeekFrom::Start(0)).await.unwrap();
-    let mut data = vec![0; 12];
-    #[allow(clippy::unused_io_amount)]
-    append.read(&mut data).await.unwrap();
+    let mut data = vec![];
+    append.read_to_end(&mut data).await.unwrap();
     assert_eq!(
         data.as_slice(),
         (initial_content.to_string() + additional_content).as_bytes()

@@ -289,16 +289,16 @@ async fn test_open_options_read_write_behavior() {
 
         assert!(rw_file.write(contents.as_bytes()).await.is_ok());
         rw_file.seek(io::SeekFrom::Start(0)).await.unwrap();
-        let mut data = vec![0; rw_file.size().unwrap() as usize];
-        assert!(rw_file.read(&mut data).await.is_ok());
+        let mut data = vec![];
+        assert!(rw_file.read_to_end(&mut data).await.is_ok());
         assert_eq!(data.as_slice(), contents.as_bytes());
     }
 
     {
         let mut rw_file = OpenOptions::new().read(true).open(path).await.unwrap();
 
-        let mut data = vec![0; rw_file.size().unwrap() as usize];
-        assert!(rw_file.read(&mut data).await.is_ok());
+        let mut data = vec![];
+        assert!(rw_file.read_to_end(&mut data).await.is_ok());
         assert_eq!(data.as_slice(), contents.as_bytes());
     }
 
@@ -355,9 +355,8 @@ async fn test_open_options_append() {
         .await
         .unwrap();
     append.seek(io::SeekFrom::Start(0)).await.unwrap();
-    let mut data = vec![0; append.size().unwrap() as usize];
-    #[allow(clippy::unused_io_amount)]
-    append.read(&mut data).await.unwrap();
+    let mut data = vec![];
+    append.read_to_end(&mut data).await.unwrap();
     assert_eq!(
         data.as_slice(),
         (initial_content.to_string() + additional_content).as_bytes()

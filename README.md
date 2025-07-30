@@ -37,7 +37,7 @@ async fn foo() -> io::Result<()> {
 
     fs::remove_file("hello.txt").await?;
 
-    io::Result::Ok(())
+    Ok(())
 }
 ```
 

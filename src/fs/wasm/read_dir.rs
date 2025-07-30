@@ -39,7 +39,7 @@ impl ReadDir {
                 Ok(next) => Ok(Some(self.process_entry(&next)?)),
                 Err(err) => Err(OpfsError::from(err).into_io_err()),
             },
-            None => io::Result::Ok(None),
+            None => Ok(None),
         }
     }
 
@@ -50,7 +50,7 @@ impl ReadDir {
                     Ok(next) => Poll::Ready(Ok(Some(self.process_entry(&next)?))),
                     Err(err) => Poll::Ready(Err(OpfsError::from(err).into_io_err())),
                 },
-                None => Poll::Ready(io::Result::Ok(None)),
+                None => Poll::Ready(Ok(None)),
             },
             Poll::Pending => Poll::Pending,
         }
@@ -67,14 +67,11 @@ impl ReadDir {
         )
         .map_err(|_| io::Error::from(io::ErrorKind::InvalidFilename))?;
 
-        let handle = js_array
-            .get(1)
-            .dyn_into::<FileSystemHandle>()
-            .map_err(|err| OpfsError::from(err).into_io_err())?;
+        let handle = js_array.get(1).unchecked_into::<FileSystemHandle>();
 
-        io::Result::Ok(DirEntry {
+        Ok(DirEntry {
             file_type: handle.kind().into(),
-            path: self.path.join(name.clone()),
+            path: self.path.join(&name),
             name,
         })
     }
