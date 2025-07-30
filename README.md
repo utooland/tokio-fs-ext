@@ -53,7 +53,7 @@ async fn foo() -> io::Result<()> {
 # test native
 cargo test
 
-# test native
+# test wasm
 brew install --cask chromedriver
 cargo test --target wasm32-unknown-unknown
 
