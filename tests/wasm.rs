@@ -2,7 +2,7 @@
 
 use futures::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use std::io;
-use tokio_fs_ext::fs::*;
+use tokio_fs_ext::*;
 
 use wasm_bindgen_test::*;
 

@@ -104,12 +104,13 @@ impl OpenOptions {
 
 impl OpenOptions {
     fn is_invalid(&self) -> bool {
-        !(self.0 & (Flags::CREATE | Flags::CREATE_NEW | Flags::TRUNCATE | Flags::APPEND)).is_empty()
+        self.0
+            .contains(Flags::CREATE | Flags::CREATE_NEW | Flags::TRUNCATE | Flags::APPEND)
             && !self.0.contains(Flags::WRITE)
     }
 
     fn is_truncate(&self) -> bool {
-        !(self.0 & (Flags::TRUNCATE | Flags::CREATE)).is_empty()
+        self.0.contains(Flags::TRUNCATE | Flags::CREATE)
     }
 }
 
@@ -133,10 +134,10 @@ impl From<&OpenOptions> for CreateFileMode {
 
 impl From<&OpenOptions> for SyncAccessMode {
     fn from(options: &OpenOptions) -> Self {
-        if (options.0 & Flags::WRITE).is_empty() {
-            SyncAccessMode::Readonly
-        } else {
+        if options.0.contains(Flags::WRITE) {
             SyncAccessMode::ReadwriteUnsafe
+        } else {
+            SyncAccessMode::Readonly
         }
     }
 }
