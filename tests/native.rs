@@ -5,7 +5,7 @@ use futures::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use std::io;
 use std::path::PathBuf;
 use std::str;
-use tokio_fs_ext::fs::*;
+use tokio_fs_ext::*;
 
 fn get_test_path(suffix: &str) -> PathBuf {
     let path = std::env::current_dir().unwrap();
