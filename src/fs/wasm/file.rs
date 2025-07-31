@@ -7,6 +7,7 @@ use std::{
 };
 
 use futures::io::{AsyncRead, AsyncSeek, AsyncWrite};
+use send_wrapper::SendWrapper;
 use web_sys::{FileSystemReadWriteOptions, FileSystemSyncAccessHandle};
 
 use crate::fs::{
@@ -19,7 +20,7 @@ use super::{metadata::FileType, opfs::SyncAccessMode};
 
 #[derive(Debug)]
 pub struct File {
-    pub(super) sync_access_handle: FileSystemSyncAccessHandle,
+    pub(super) sync_access_handle: SendWrapper<FileSystemSyncAccessHandle>,
     pub(super) pos: Mutex<u64>,
 }
 

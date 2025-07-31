@@ -19,24 +19,22 @@ use crate::fs::File;
 
 static OPFS_ROOT: OnceCell<SendWrapper<FileSystemDirectoryHandle>> = OnceCell::const_new();
 
-async fn opfs_root() -> io::Result<&'static FileSystemDirectoryHandle> {
+async fn opfs_root() -> io::Result<SendWrapper<FileSystemDirectoryHandle>> {
     let root = OPFS_ROOT
         .get_or_try_init(|| async {
-            io::Result::Ok(SendWrapper::new(
-                JsFuture::from(
-                    DedicatedWorkerGlobalScope::from(JsValue::from(js_sys::global()))
-                        .navigator()
-                        .storage()
-                        .get_directory(),
-                )
-                .await
-                .map_err(|err| OpfsError::from(err).into_io_err())?
-                .unchecked_into::<FileSystemDirectoryHandle>(),
-            ))
+            let storage = DedicatedWorkerGlobalScope::from(JsValue::from(js_sys::global()))
+                .navigator()
+                .storage();
+            let root_handle =
+                SendWrapper::new(JsFuture::from(SendWrapper::new(storage).get_directory()))
+                    .await
+                    .map_err(|err| OpfsError::from(err).into_io_err())?
+                    .unchecked_into::<FileSystemDirectoryHandle>();
+            io::Result::Ok(SendWrapper::new(root_handle))
         })
         .await?;
 
-    Ok(root.as_ref())
+    Ok(root.clone())
 }
 
 pub struct OpfsError {
@@ -116,29 +114,29 @@ pub(super) async fn open_file(
         None => Err(io::Error::from(io::ErrorKind::InvalidFilename)),
     }?;
 
-    let dir_entry: &FileSystemDirectoryHandle = match parent {
+    let dir_entry = match parent {
         Some(parent_path) => {
             if parent_path.to_string_lossy().is_empty() {
                 opfs_root().await?
             } else {
-                &open_dir(parent_path, OpenDirType::NotCreate).await?
+                open_dir(parent_path, OpenDirType::NotCreate).await?
             }
         }
         None => opfs_root().await?,
     };
 
     let sync_access_handle = match create {
-        CreateFileMode::Create => get_file_handle(&name, dir_entry, mode, true, truncate).await?,
+        CreateFileMode::Create => get_file_handle(&name, &dir_entry, mode, true, truncate).await?,
         CreateFileMode::CreateNew => {
-            match get_file_handle(&name, dir_entry, mode, false, truncate).await {
+            match get_file_handle(&name, &dir_entry, mode, false, truncate).await {
                 Ok(_) => {
                     return Err(io::Error::from(io::ErrorKind::AlreadyExists));
                 }
-                Err(_) => get_file_handle(&name, dir_entry, mode, true, truncate).await?,
+                Err(_) => get_file_handle(&name, &dir_entry, mode, true, truncate).await?,
             }
         }
         CreateFileMode::NotCreate => {
-            get_file_handle(&name, dir_entry, mode, false, truncate).await?
+            get_file_handle(&name, &dir_entry, mode, false, truncate).await?
         }
     };
     Ok(File {
@@ -149,19 +147,21 @@ pub(super) async fn open_file(
 
 async fn get_file_handle(
     name: &str,
-    dir_entry: &FileSystemDirectoryHandle,
+    dir_entry: &SendWrapper<FileSystemDirectoryHandle>,
     mode: SyncAccessMode,
     create: bool,
     truncate: bool,
-) -> Result<FileSystemSyncAccessHandle, io::Error> {
-    let option = FileSystemGetFileOptions::new();
+) -> Result<SendWrapper<FileSystemSyncAccessHandle>, io::Error> {
+    let option = SendWrapper::new(FileSystemGetFileOptions::new());
     option.set_create(create);
-    let file_handle = JsFuture::from(dir_entry.get_file_handle_with_options(name, &option))
-        .await
-        .map_err(|err| OpfsError::from(err).into_io_err())?
-        .unchecked_into::<FileSystemFileHandle>();
+    let file_handle = SendWrapper::new(JsFuture::from(
+        dir_entry.get_file_handle_with_options(name, &option),
+    ))
+    .await
+    .map_err(|err| OpfsError::from(err).into_io_err())?
+    .unchecked_into::<FileSystemFileHandle>();
 
-    let file_handle_js_value = JsValue::from(file_handle);
+    let file_handle_js_value = SendWrapper::new(JsValue::from(file_handle));
 
     let promise = Reflect::get(&file_handle_js_value, &"createSyncAccessHandle".into())
         .map_err(|err| OpfsError::from(err).into_io_err())?
@@ -173,7 +173,7 @@ async fn get_file_handle(
         .map_err(|err| OpfsError::from(err).into_io_err())?
         .unchecked_into::<Promise>();
 
-    let sync_access_handle = JsFuture::from(promise)
+    let sync_access_handle = SendWrapper::new(JsFuture::from(promise))
         .await
         .map_err(|err| OpfsError::from(err).into_io_err())?
         .unchecked_into::<FileSystemSyncAccessHandle>();
@@ -183,7 +183,7 @@ async fn get_file_handle(
             .truncate_with_u32(0)
             .map_err(|err| OpfsError::from(err).into_io_err())?;
     }
-    Ok(sync_access_handle)
+    Ok(SendWrapper::new(sync_access_handle))
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -196,7 +196,7 @@ pub(crate) enum OpenDirType {
 pub(crate) async fn open_dir(
     path: impl AsRef<Path>,
     r#type: OpenDirType,
-) -> io::Result<FileSystemDirectoryHandle> {
+) -> io::Result<SendWrapper<FileSystemDirectoryHandle>> {
     let virt = virtualize(path)?;
 
     let components = virt
@@ -214,7 +214,7 @@ pub(crate) async fn open_dir(
 
     if total_depth == 1 {
         return get_dir_handle(
-            root,
+            &root,
             &components[0],
             matches!(r#type, OpenDirType::Create | OpenDirType::CreateRecursive),
         )
@@ -222,7 +222,7 @@ pub(crate) async fn open_dir(
     }
 
     let mut dir_handle = get_dir_handle(
-        root,
+        &root,
         &components[0],
         matches!(r#type, OpenDirType::CreateRecursive),
     )
@@ -248,19 +248,20 @@ pub(crate) async fn open_dir(
 }
 
 async fn get_dir_handle(
-    parent: &FileSystemDirectoryHandle,
+    parent: &SendWrapper<FileSystemDirectoryHandle>,
     path: &str,
     create: bool,
-) -> io::Result<FileSystemDirectoryHandle> {
-    let options = FileSystemGetDirectoryOptions::new();
+) -> io::Result<SendWrapper<FileSystemDirectoryHandle>> {
+    let options = SendWrapper::new(FileSystemGetDirectoryOptions::new());
     options.set_create(create);
 
-    Ok(
-        JsFuture::from(parent.get_directory_handle_with_options(path, &options))
-            .await
-            .map_err(|err| OpfsError::from(err).into_io_err())?
-            .unchecked_into::<FileSystemDirectoryHandle>(),
-    )
+    let dir_handle = SendWrapper::new(JsFuture::from(
+        parent.get_directory_handle_with_options(path, &options),
+    ))
+    .await
+    .map_err(|err| OpfsError::from(err).into_io_err())?
+    .unchecked_into::<FileSystemDirectoryHandle>();
+    Ok(SendWrapper::new(dir_handle))
 }
 
 pub(crate) async fn rm(path: impl AsRef<Path>, recursive: bool) -> io::Result<()> {
@@ -273,12 +274,12 @@ pub(crate) async fn rm(path: impl AsRef<Path>, recursive: bool) -> io::Result<()
         None => Err(io::Error::from(io::ErrorKind::InvalidFilename)),
     }?;
 
-    let dir_entry: &FileSystemDirectoryHandle = match parent {
+    let dir_entry = match parent {
         Some(path) => {
             if path.to_string_lossy().is_empty() {
                 opfs_root().await?
             } else {
-                &open_dir(path, OpenDirType::NotCreate).await?
+                open_dir(path, OpenDirType::NotCreate).await?
             }
         }
         None => opfs_root().await?,
@@ -287,9 +288,11 @@ pub(crate) async fn rm(path: impl AsRef<Path>, recursive: bool) -> io::Result<()
     let options = FileSystemRemoveOptions::new();
     options.set_recursive(recursive);
 
-    JsFuture::from(dir_entry.remove_entry_with_options(&name, &options))
-        .await
-        .map_err(|err| OpfsError::from(err).into_io_err())?;
+    SendWrapper::new(JsFuture::from(
+        dir_entry.remove_entry_with_options(&name, &options),
+    ))
+    .await
+    .map_err(|err| OpfsError::from(err).into_io_err())?;
 
     Ok(())
 }
