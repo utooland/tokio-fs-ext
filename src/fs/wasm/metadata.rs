@@ -5,8 +5,9 @@ use web_sys::FileSystemHandleKind;
 use crate::fs::opfs::{OpfsError, open_dir, open_file};
 
 /// Symlink is not supported.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum FileType {
+    #[default]
     File,
     Directory,
     // TODO:
@@ -41,7 +42,7 @@ impl From<FileSystemHandleKind> for FileType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Metadata {
     pub(crate) file_type: FileType,
     pub(crate) file_size: u64,
