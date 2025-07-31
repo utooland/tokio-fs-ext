@@ -332,7 +332,7 @@ dependencies = [
 
 [[package]]
 name = "tokio-fs-ext"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "bitflags",
  "cfg-if",
