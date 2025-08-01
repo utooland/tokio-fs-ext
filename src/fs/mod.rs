@@ -42,3 +42,7 @@ cfg_if! {
 
     }
 }
+
+mod read_dir_stream;
+
+pub use read_dir_stream::ReadDirStream;

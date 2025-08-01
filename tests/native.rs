@@ -1,7 +1,10 @@
 #![feature(io_error_uncategorized)]
 #![cfg(not(all(target_family = "wasm", target_os = "unknown")))]
 
-use futures::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
+use futures::{
+    io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
+    stream::TryStreamExt,
+};
 use std::io;
 use std::path::PathBuf;
 use std::str;
@@ -82,6 +85,47 @@ async fn test_dir_read_dir_contents() {
     assert!(rd.next_entry().await.unwrap().is_none());
 
     let _ = remove_dir_all(&base_path).await;
+}
+
+#[tokio::test]
+#[allow(clippy::uninlined_format_args)]
+async fn test_dir_read_dir_stream() {
+    let base_path = get_test_path("/test_dir_read_dir_stream");
+    // Use PathBuf::join for constructing paths
+    let dir_path = base_path.join("dir_inside");
+    let file_path = base_path.join("file_inside");
+    let _ = remove_dir_all(&base_path).await;
+    create_dir_all(&base_path).await.unwrap();
+
+    create_dir(&dir_path).await.unwrap();
+    write(&file_path, "some content").await.unwrap();
+
+    let mut entries = futures::future::join_all(
+        ReadDirStream::new(read_dir(&base_path).await.unwrap())
+            .try_collect::<Vec<_>>()
+            .await
+            .unwrap()
+            .iter()
+            .map(async |e| {
+                (
+                    e.file_type().await.unwrap().is_dir(),
+                    e.file_name().to_string_lossy().to_string(),
+                )
+            }),
+    )
+    .await;
+
+    entries.sort_by_key(|e| e.0);
+
+    assert_eq!(
+        entries,
+        vec![
+            (false, "file_inside".to_string()),
+            (true, "dir_inside".to_string())
+        ]
+    );
+
+    let _ = remove_dir_all(base_path).await;
 }
 
 #[tokio::test]
@@ -321,7 +365,7 @@ async fn test_open_options_read_write_behavior() {
         assert_eq!(data.as_slice(), contents.as_bytes());
     }
 
-    let _ = remove_dir_all(&path).await; // Changed to remove_dir_all as it might be a file or directory
+    let _ = remove_file(&path).await; // Changed to remove_dir_all as it might be a file or directory
 }
 
 #[tokio::test]

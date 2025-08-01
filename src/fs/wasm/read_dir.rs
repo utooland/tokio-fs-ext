@@ -1,5 +1,6 @@
 use std::{
     ffi::OsString,
+    fmt::Debug,
     fs::Metadata,
     io,
     path::{Path, PathBuf},
@@ -31,6 +32,12 @@ pub async fn read_dir(path: impl AsRef<Path>) -> io::Result<ReadDir> {
 pub struct ReadDir {
     path: PathBuf,
     pub(super) stream: SendWrapper<JsStream>,
+}
+
+impl Debug for ReadDir {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ReadDir").field("path", &self.path).finish()
+    }
 }
 
 impl ReadDir {
@@ -94,7 +101,7 @@ impl DirEntry {
         self.name.clone()
     }
 
-    pub fn file_type(&self) -> io::Result<FileType> {
+    pub async fn file_type(&self) -> io::Result<FileType> {
         Ok(self.file_type)
     }
 

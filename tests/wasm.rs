@@ -1,5 +1,6 @@
 #![cfg(all(target_family = "wasm", target_os = "unknown"))]
 
+use futures::TryStreamExt;
 use futures::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use std::io;
 use tokio_fs_ext::*;
@@ -55,10 +56,10 @@ async fn test_dir_read_dir_contents() {
     let mut rd = read_dir(base_path).await.unwrap();
     let mut entries = Vec::new();
 
-    while let Some(entry) = rd.next_entry().await.unwrap() {
+    while let Some(e) = rd.next_entry().await.unwrap() {
         entries.push((
-            entry.file_type().unwrap().is_dir(),
-            entry.file_name().to_string_lossy().to_string(),
+            e.file_type().await.unwrap().is_dir(),
+            e.file_name().to_string_lossy().to_string(),
         ));
     }
 
@@ -72,6 +73,47 @@ async fn test_dir_read_dir_contents() {
         ]
     );
     assert!(rd.next_entry().await.unwrap().is_none());
+
+    let _ = remove_dir_all(base_path).await;
+}
+
+#[wasm_bindgen_test]
+#[allow(clippy::uninlined_format_args)]
+async fn test_dir_read_dir_stream() {
+    let base_path = "/test_dir_read_dir_stream";
+    let dir_path = format!("{}/dir_inside", base_path);
+    let file_path = format!("{}/file_inside", base_path);
+    let _ = remove_dir_all(base_path).await;
+    create_dir_all(base_path).await.unwrap();
+
+    create_dir(&dir_path).await.unwrap();
+    write(&file_path, "some content").await.unwrap();
+
+ let mut entries = futures::future::join_all(
+        ReadDirStream::new(read_dir(&base_path).await.unwrap())
+            .try_collect::<Vec<_>>()
+            .await
+            .unwrap()
+            .iter()
+            .map(async |e| {
+                (
+                    e.file_type().await.unwrap().is_dir(),
+                    e.file_name().to_string_lossy().to_string(),
+                )
+            }),
+    )
+    .await;
+
+
+    entries.sort_by_key(|e| e.0);
+
+    assert_eq!(
+        entries,
+        vec![
+            (false, "file_inside".to_string()),
+            (true, "dir_inside".to_string())
+        ]
+    );
 
     let _ = remove_dir_all(base_path).await;
 }
