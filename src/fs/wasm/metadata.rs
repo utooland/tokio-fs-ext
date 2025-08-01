@@ -18,9 +18,11 @@ impl FileType {
     pub fn is_dir(&self) -> bool {
         *self == Self::Directory
     }
+
     pub fn is_file(&self) -> bool {
         *self == Self::File
     }
+
     pub fn is_symlink(&self) -> bool {
         *self == Self::Symlink
     }

@@ -285,7 +285,7 @@ pub(crate) async fn rm(path: impl AsRef<Path>, recursive: bool) -> io::Result<()
         None => opfs_root().await?,
     };
 
-    let options = FileSystemRemoveOptions::new();
+    let options = SendWrapper::new(FileSystemRemoveOptions::new());
     options.set_recursive(recursive);
 
     SendWrapper::new(JsFuture::from(

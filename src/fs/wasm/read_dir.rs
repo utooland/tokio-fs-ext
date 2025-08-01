@@ -9,6 +9,7 @@ use std::{
 
 use futures::stream::StreamExt;
 use js_sys::{Array, JsString};
+use send_wrapper::SendWrapper;
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::stream::JsStream;
 use web_sys::FileSystemHandle;
@@ -22,14 +23,14 @@ pub async fn read_dir(path: impl AsRef<Path>) -> io::Result<ReadDir> {
     let dir_handle = open_dir(&path, super::opfs::OpenDirType::NotCreate).await?;
     Ok(ReadDir {
         path: path.as_ref().into(),
-        stream: JsStream::from(dir_handle.entries()),
+        stream: SendWrapper::new(JsStream::from(dir_handle.entries())),
     })
 }
 
 #[must_use = "streams do nothing unless polled"]
 pub struct ReadDir {
     path: PathBuf,
-    pub(super) stream: JsStream,
+    pub(super) stream: SendWrapper<JsStream>,
 }
 
 impl ReadDir {
@@ -93,8 +94,8 @@ impl DirEntry {
         self.name.clone()
     }
 
-    pub fn file_type(&self) -> FileType {
-        self.file_type
+    pub fn file_type(&self) -> io::Result<FileType> {
+        Ok(self.file_type)
     }
 
     pub async fn metadata(&self) -> io::Result<Metadata> {
