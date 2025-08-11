@@ -29,7 +29,8 @@ async fn opfs_root() -> io::Result<SendWrapper<FileSystemDirectoryHandle>> {
                 SendWrapper::new(JsFuture::from(SendWrapper::new(storage).get_directory()))
                     .await
                     .map_err(|err| OpfsError::from(err).into_io_err())?
-                    .unchecked_into::<FileSystemDirectoryHandle>();
+                    .dyn_into::<FileSystemDirectoryHandle>()
+                    .map_err(|err| OpfsError::from(err).into_io_err())?;
             io::Result::Ok(SendWrapper::new(root_handle))
         })
         .await?;
