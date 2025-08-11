@@ -207,41 +207,21 @@ pub(crate) async fn open_dir(
 
     let total_depth = components.len();
 
-    if total_depth == 0 {
-        return Err(io::Error::from(io::ErrorKind::InvalidInput));
-    }
+    let mut dir_handle = opfs_root().await?;
 
-    let root = opfs_root().await?;
+    let mut found = 0_usize;
 
-    if total_depth == 1 {
-        return get_dir_handle(
-            &root,
-            &components[0],
-            matches!(r#type, OpenDirType::Create | OpenDirType::CreateRecursive),
-        )
-        .await;
-    }
-
-    let mut dir_handle = get_dir_handle(
-        &root,
-        &components[0],
-        matches!(r#type, OpenDirType::CreateRecursive),
-    )
-    .await?;
-
-    let mut depth = 1_usize;
-
-    for c in components.iter().skip(1) {
+    for c in components.iter() {
         dir_handle = get_dir_handle(
             &dir_handle,
             c,
             matches!(r#type, OpenDirType::Create | OpenDirType::CreateRecursive),
         )
         .await?;
-        depth += 1;
+        found += 1;
     }
 
-    if depth != total_depth {
+    if found != total_depth {
         return Err(io::Error::from(io::ErrorKind::NotFound));
     }
 
