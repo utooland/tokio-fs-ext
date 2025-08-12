@@ -1,4 +1,7 @@
-use std::{io, path::Path};
+use std::{
+    io,
+    path::{Component, Path},
+};
 
 use send_wrapper::SendWrapper;
 use wasm_bindgen::JsCast;
@@ -15,7 +18,10 @@ pub(crate) async fn open_dir(
 
     let components = virt
         .components()
-        .map(|c| c.as_os_str().to_string_lossy())
+        .filter_map(|c| match c {
+            Component::Normal(c) => Some(c.to_string_lossy()),
+            _ => None,
+        })
         .collect::<Vec<_>>();
 
     let total_depth = components.len();

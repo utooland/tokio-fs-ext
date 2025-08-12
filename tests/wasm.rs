@@ -1,6 +1,6 @@
 #![cfg(all(target_family = "wasm", target_os = "unknown"))]
 
-use std::io;
+use std::{io, path::PathBuf};
 
 use futures::{
     TryStreamExt,
@@ -515,4 +515,27 @@ async fn test_thread_safe_guard() {
         let _ = read("thread_safe_guard").await;
     })
     .await;
+}
+
+#[wasm_bindgen_test]
+async fn test_current_dir() {
+    assert_eq!(current_dir().unwrap().to_string_lossy(), "/");
+
+    let deep_dir = PathBuf::from("/test_current_dir/deep/deep");
+    let file_path = PathBuf::from("./deep/data.txt");
+    let content = b"hello world";
+
+    create_dir_all(&deep_dir).await.unwrap();
+
+    set_current_dir(deep_dir.parent().unwrap()).unwrap();
+
+    write(&file_path, content.to_vec()).await.unwrap();
+
+    set_current_dir("/").unwrap();
+
+    let read_content = read(deep_dir.join("data.txt")).await.unwrap();
+
+    assert_eq!(read_content, content.to_vec());
+
+    let _ = remove_dir_all(deep_dir).await;
 }

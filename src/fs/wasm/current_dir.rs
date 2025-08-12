@@ -1,10 +1,10 @@
 use std::{
     io,
     path::{Path, PathBuf},
-    sync::RwLock,
+    sync::{LazyLock, RwLock},
 };
 
-static CWD: RwLock<PathBuf> = RwLock::new(PathBuf::new());
+static CWD: LazyLock<RwLock<PathBuf>> = LazyLock::new(|| RwLock::new(PathBuf::from("/")));
 
 pub fn current_dir() -> io::Result<PathBuf> {
     let cwd = CWD

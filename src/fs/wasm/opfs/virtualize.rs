@@ -1,6 +1,6 @@
 use std::{
     io,
-    path::{Component, Path, PathBuf},
+    path::{Component, MAIN_SEPARATOR_STR, Path, PathBuf},
 };
 
 use crate::fs::wasm::current_dir;
@@ -8,7 +8,11 @@ use crate::fs::wasm::current_dir;
 pub(crate) fn virtualize(path: impl AsRef<Path>) -> Result<PathBuf, io::Error> {
     // TODO: should handle symlink here
 
-    let path = current_dir()?.join(path);
+    let path = if path.as_ref().starts_with(MAIN_SEPARATOR_STR) {
+        path.as_ref().into()
+    } else {
+        current_dir()?.join(path)
+    };
 
     let mut out = Vec::new();
 
@@ -30,10 +34,7 @@ pub(crate) fn virtualize(path: impl AsRef<Path>) -> Result<PathBuf, io::Error> {
     }
 
     if !out.is_empty() {
-        Ok(out
-            .iter()
-            .filter(|c| !matches!(c, Component::RootDir))
-            .collect())
+        Ok(out.iter().collect())
     } else {
         Ok(PathBuf::from("."))
     }
