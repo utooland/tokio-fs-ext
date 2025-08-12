@@ -1,7 +1,7 @@
 #![feature(io_error_uncategorized)]
 #![cfg(not(all(target_family = "wasm", target_os = "unknown")))]
 
-use std::{io, path::PathBuf, str};
+use std::{io, path::PathBuf, str, sync::LazyLock};
 
 use futures::{
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
@@ -9,9 +9,10 @@ use futures::{
 };
 use tokio_fs_ext::*;
 
+static CWD: LazyLock<PathBuf> = LazyLock::new(|| std::env::current_dir().unwrap());
+
 fn get_test_path(suffix: &str) -> PathBuf {
-    let path = std::env::current_dir().unwrap();
-    let base_test_dir = path.join("target").join("tokio_fs_ext_test");
+    let base_test_dir = CWD.join("target").join("tokio_fs_ext_test");
 
     std::fs::create_dir_all(&base_test_dir).unwrap();
 
@@ -134,8 +135,6 @@ async fn test_dir_non_existent_path() {
 
     assert!(!try_exists(&path).await.unwrap());
 }
-
-// --- test_file split into smaller tests ---
 
 #[tokio::test]
 async fn test_file_create_write_read() {
@@ -512,4 +511,25 @@ async fn test_async_seek() {
     );
 
     let _ = remove_dir_all(&base_dir).await;
+}
+
+#[tokio::test]
+async fn test_current_dir() {
+    let deep_dir = get_test_path("test_current_dir/deep/deep");
+    let file_path = PathBuf::from("deep/data.txt");
+    let content = b"hello world";
+
+    create_dir_all(&deep_dir).await.unwrap();
+
+    set_current_dir(deep_dir.parent().unwrap()).unwrap();
+
+    write(&file_path, content.to_vec()).await.unwrap();
+
+    set_current_dir(&deep_dir).unwrap();
+
+    let read_content = read("data.txt").await.unwrap();
+
+    assert_eq!(read_content, content.to_vec());
+
+    let _ = remove_dir_all(deep_dir).await;
 }
