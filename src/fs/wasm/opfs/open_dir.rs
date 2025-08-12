@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     io,
     path::{Component, Path},
 };
@@ -8,7 +9,7 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{FileSystemDirectoryHandle, FileSystemGetDirectoryOptions};
 
-use super::{OpfsError, options::OpenDirType, root::opfs_root, virtualize};
+use super::{OpfsError, options::OpenDirType, root::root, virtualize};
 
 pub(crate) async fn open_dir(
     path: impl AsRef<Path>,
@@ -16,17 +17,17 @@ pub(crate) async fn open_dir(
 ) -> io::Result<SendWrapper<FileSystemDirectoryHandle>> {
     let virt = virtualize::virtualize(path)?;
 
-    let components = virt
+    let components: Vec<Cow<'_, str>> = virt
         .components()
         .filter_map(|c| match c {
             Component::Normal(c) => Some(c.to_string_lossy()),
             _ => None,
         })
-        .collect::<Vec<_>>();
+        .collect();
 
     let total_depth = components.len();
 
-    let mut dir_handle = opfs_root().await?;
+    let mut dir_handle = root().await?;
 
     let mut found = 0_usize;
 
@@ -47,7 +48,7 @@ pub(crate) async fn open_dir(
     Ok(dir_handle)
 }
 
-pub(crate) async fn get_dir_handle(
+async fn get_dir_handle(
     parent: &SendWrapper<FileSystemDirectoryHandle>,
     path: &str,
     create: bool,

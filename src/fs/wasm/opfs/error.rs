@@ -4,8 +4,8 @@ use js_sys::Object;
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::DomException;
 
-pub struct OpfsError {
-    pub(crate) js_err: JsValue,
+pub(crate) struct OpfsError {
+    js_err: JsValue,
 }
 
 impl OpfsError {

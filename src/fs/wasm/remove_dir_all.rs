@@ -1,7 +1,7 @@
 use std::{io, path::Path};
 
-use crate::fs::opfs::rm;
+use crate::fs::opfs::remove;
 
 pub async fn remove_dir_all(path: impl AsRef<Path>) -> io::Result<()> {
-    rm(path, true).await
+    remove(path, true).await
 }

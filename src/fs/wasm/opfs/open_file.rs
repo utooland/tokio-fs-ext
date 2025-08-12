@@ -15,7 +15,7 @@ use super::{
     error::OpfsError,
     open_dir,
     options::{CreateFileMode, CreateSyncAccessHandleOptions, SyncAccessMode},
-    root::opfs_root,
+    root::root,
     virtualize,
 };
 
@@ -37,12 +37,12 @@ pub(crate) async fn open_file(
     let dir_entry = match parent {
         Some(parent_path) => {
             if parent_path.to_string_lossy().is_empty() {
-                opfs_root().await?
+                root().await?
             } else {
                 open_dir(parent_path, OpenDirType::NotCreate).await?
             }
         }
-        None => opfs_root().await?,
+        None => root().await?,
     };
 
     let sync_access_handle = match create {
@@ -65,7 +65,7 @@ pub(crate) async fn open_file(
     })
 }
 
-pub(crate) async fn get_file_handle(
+async fn get_file_handle(
     name: &str,
     dir_entry: &SendWrapper<FileSystemDirectoryHandle>,
     mode: SyncAccessMode,

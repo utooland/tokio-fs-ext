@@ -4,9 +4,9 @@ use send_wrapper::SendWrapper;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::FileSystemRemoveOptions;
 
-use super::{OpenDirType, OpfsError, open_dir, root::opfs_root, virtualize};
+use super::{OpenDirType, OpfsError, open_dir, root::root, virtualize};
 
-pub(crate) async fn rm(path: impl AsRef<Path>, recursive: bool) -> io::Result<()> {
+pub(crate) async fn remove(path: impl AsRef<Path>, recursive: bool) -> io::Result<()> {
     let virt = virtualize::virtualize(path)?;
 
     let parent = virt.parent();
@@ -19,12 +19,12 @@ pub(crate) async fn rm(path: impl AsRef<Path>, recursive: bool) -> io::Result<()
     let dir_entry = match parent {
         Some(path) => {
             if path.to_string_lossy().is_empty() {
-                opfs_root().await?
+                root().await?
             } else {
                 open_dir(path, OpenDirType::NotCreate).await?
             }
         }
-        None => opfs_root().await?,
+        None => root().await?,
     };
 
     let options = SendWrapper::new(FileSystemRemoveOptions::new());

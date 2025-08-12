@@ -8,10 +8,9 @@ use web_sys::{DedicatedWorkerGlobalScope, FileSystemDirectoryHandle};
 
 use super::OpfsError;
 
-pub(crate) static OPFS_ROOT: OnceCell<SendWrapper<FileSystemDirectoryHandle>> =
-    OnceCell::const_new();
+static OPFS_ROOT: OnceCell<SendWrapper<FileSystemDirectoryHandle>> = OnceCell::const_new();
 
-pub(crate) async fn opfs_root() -> io::Result<SendWrapper<FileSystemDirectoryHandle>> {
+pub(super) async fn root() -> io::Result<SendWrapper<FileSystemDirectoryHandle>> {
     let root = OPFS_ROOT
         .get_or_try_init(|| async {
             let storage = DedicatedWorkerGlobalScope::from(JsValue::from(js_sys::global()))
