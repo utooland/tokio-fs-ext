@@ -4,7 +4,10 @@ use send_wrapper::SendWrapper;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::FileSystemRemoveOptions;
 
-use super::{OpenDirType, OpfsError, open_dir, root::root, virtualize};
+use super::{
+    OpenDirType, OpfsError, dir_handle_cache::remove_cached_dir_handle, open_dir, root::root,
+    virtualize,
+};
 
 pub(crate) async fn remove(path: impl AsRef<Path>, recursive: bool) -> io::Result<()> {
     let virt = virtualize::virtualize(path)?;
@@ -17,13 +20,7 @@ pub(crate) async fn remove(path: impl AsRef<Path>, recursive: bool) -> io::Resul
     }?;
 
     let dir_entry = match parent {
-        Some(path) => {
-            if path.to_string_lossy().is_empty() {
-                root().await?
-            } else {
-                open_dir(path, OpenDirType::NotCreate).await?
-            }
-        }
+        Some(parent) => open_dir(parent, OpenDirType::NotCreate).await?,
         None => root().await?,
     };
 
@@ -35,6 +32,8 @@ pub(crate) async fn remove(path: impl AsRef<Path>, recursive: bool) -> io::Resul
     ))
     .await
     .map_err(|err| OpfsError::from(err).into_io_err())?;
+
+    remove_cached_dir_handle(&virt, recursive);
 
     Ok(())
 }

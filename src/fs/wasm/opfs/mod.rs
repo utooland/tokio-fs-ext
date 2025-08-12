@@ -1,3 +1,4 @@
+mod dir_handle_cache;
 mod error;
 mod open_dir;
 mod open_file;

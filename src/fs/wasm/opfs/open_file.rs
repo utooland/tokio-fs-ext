@@ -35,13 +35,7 @@ pub(crate) async fn open_file(
     }?;
 
     let dir_entry = match parent {
-        Some(parent_path) => {
-            if parent_path.to_string_lossy().is_empty() {
-                root().await?
-            } else {
-                open_dir(parent_path, OpenDirType::NotCreate).await?
-            }
-        }
+        Some(parent_path) => open_dir(parent_path, OpenDirType::NotCreate).await?,
         None => root().await?,
     };
 
