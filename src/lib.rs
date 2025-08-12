@@ -1,4 +1,5 @@
 #![feature(io_error_uncategorized)]
+#![feature(const_pathbuf_osstring_new)]
 
 mod fs;
 

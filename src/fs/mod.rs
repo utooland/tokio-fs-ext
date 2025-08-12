@@ -1,4 +1,7 @@
 use cfg_if::cfg_if;
+mod read_dir_stream;
+
+pub use read_dir_stream::ReadDirStream;
 
 cfg_if! {
     if #[cfg(all(target_family = "wasm", target_os = "unknown"))] {
@@ -7,7 +10,7 @@ cfg_if! {
 
         pub(crate) use wasm::opfs;
 
-        pub use wasm::{File, OpenOptions};
+        pub use wasm::{ File, OpenOptions, current_dir, set_current_dir };
 
         pub use wasm::{
             DirBuilder, DirEntry, ReadDir, canonicalize, copy, create_dir, create_dir_all,
@@ -21,7 +24,7 @@ cfg_if! {
 
         mod native;
 
-        pub use native::{File, OpenOptions};
+        pub use native::{ File, OpenOptions, current_dir, set_current_dir };
 
         pub use tokio::fs::{
             DirBuilder, DirEntry, ReadDir, canonicalize, copy, create_dir, create_dir_all,
@@ -42,7 +45,3 @@ cfg_if! {
 
     }
 }
-
-mod read_dir_stream;
-
-pub use read_dir_stream::ReadDirStream;

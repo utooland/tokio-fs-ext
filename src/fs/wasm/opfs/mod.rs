@@ -15,7 +15,7 @@ use web_sys::{
     FileSystemSyncAccessHandle,
 };
 
-use crate::fs::File;
+use super::{File, current_dir};
 
 static OPFS_ROOT: OnceCell<SendWrapper<FileSystemDirectoryHandle>> = OnceCell::const_new();
 
@@ -280,9 +280,12 @@ pub(crate) async fn rm(path: impl AsRef<Path>, recursive: bool) -> io::Result<()
 
 pub(crate) fn virtualize(path: impl AsRef<Path>) -> Result<PathBuf, io::Error> {
     // TODO: should handle symlink here
+
+    let path = current_dir()?.join(path);
+
     let mut out = Vec::new();
 
-    for comp in path.as_ref().components() {
+    for comp in path.components() {
         match comp {
             Component::CurDir => (),
             Component::ParentDir => match out.last() {
