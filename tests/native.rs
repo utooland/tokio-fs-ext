@@ -1,13 +1,12 @@
 #![feature(io_error_uncategorized)]
 #![cfg(not(all(target_family = "wasm", target_os = "unknown")))]
 
+use std::{io, path::PathBuf, str};
+
 use futures::{
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
     stream::TryStreamExt,
 };
-use std::io;
-use std::path::PathBuf;
-use std::str;
 use tokio_fs_ext::*;
 
 fn get_test_path(suffix: &str) -> PathBuf {

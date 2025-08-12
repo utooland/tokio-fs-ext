@@ -10,13 +10,12 @@ use futures::io::{AsyncRead, AsyncSeek, AsyncWrite};
 use send_wrapper::SendWrapper;
 use web_sys::{FileSystemReadWriteOptions, FileSystemSyncAccessHandle};
 
+use super::{metadata::FileType, opfs::SyncAccessMode};
 use crate::fs::{
     OpenOptions,
     opfs::{OpfsError, open_file},
     wasm::metadata::Metadata,
 };
-
-use super::{metadata::FileType, opfs::SyncAccessMode};
 
 #[derive(Debug)]
 pub struct File {

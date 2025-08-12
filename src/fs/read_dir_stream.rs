@@ -1,7 +1,10 @@
+use std::{
+    io,
+    pin::Pin,
+    task::{Context, Poll},
+};
+
 use futures::stream::Stream;
-use std::io;
-use std::pin::Pin;
-use std::task::{Context, Poll};
 
 use crate::{DirEntry, ReadDir};
 

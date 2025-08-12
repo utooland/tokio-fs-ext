@@ -1,13 +1,13 @@
 #![cfg(all(target_family = "wasm", target_os = "unknown"))]
 
-use futures::TryStreamExt;
-use futures::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use std::io;
+
+use futures::{
+    TryStreamExt,
+    io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
+};
 use tokio_fs_ext::*;
-
-use wasm_bindgen_test::*;
-
-use wasm_bindgen_test::wasm_bindgen_test_configure;
+use wasm_bindgen_test::{wasm_bindgen_test_configure, *};
 
 wasm_bindgen_test_configure!(run_in_dedicated_worker);
 
@@ -89,7 +89,7 @@ async fn test_dir_read_dir_stream() {
     create_dir(&dir_path).await.unwrap();
     write(&file_path, "some content").await.unwrap();
 
- let mut entries = futures::future::join_all(
+    let mut entries = futures::future::join_all(
         ReadDirStream::new(read_dir(&base_path).await.unwrap())
             .try_collect::<Vec<_>>()
             .await
@@ -103,7 +103,6 @@ async fn test_dir_read_dir_stream() {
             }),
     )
     .await;
-
 
     entries.sort_by_key(|e| e.0);
 

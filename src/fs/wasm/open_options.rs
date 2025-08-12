@@ -1,6 +1,7 @@
+use std::{io, path::Path};
+
 use bitflags::bitflags;
 use futures::io::AsyncSeekExt;
-use std::{io, path::Path};
 
 use crate::fs::{
     File,

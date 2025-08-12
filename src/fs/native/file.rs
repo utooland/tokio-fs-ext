@@ -1,4 +1,3 @@
-use pin_project_lite::pin_project;
 use std::{
     fs::Metadata,
     io,
@@ -6,6 +5,8 @@ use std::{
     pin::Pin,
     task::{Context, Poll, ready},
 };
+
+use pin_project_lite::pin_project;
 use tokio::{fs::OpenOptions, io::AsyncSeek};
 
 pin_project! {
