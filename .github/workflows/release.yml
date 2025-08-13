@@ -15,18 +15,13 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install wasm32-unknown-unknown
+      - name: Install wasm toolchain
         run: |
           rustup target add wasm32-unknown-unknown
-
-      - name: Install wasm-pack
-        uses: jetli/wasm-pack-action@v0.4.0
-        with:
-          version: latest
+          cargo install wasm-bindgen-cli
 
       - name: Run tests
         run: |
-          chmod +x $(which wasm-bindgen-test-runner)
           cargo test
           cargo test --target wasm32-unknown-unknown
         env:
