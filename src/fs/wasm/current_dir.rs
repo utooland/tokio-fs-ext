@@ -4,10 +4,10 @@ use std::{
     sync::{LazyLock, RwLock},
 };
 
-static CWD: LazyLock<RwLock<PathBuf>> = LazyLock::new(|| RwLock::new(PathBuf::from("/")));
+static CURRENT_DIR: LazyLock<RwLock<PathBuf>> = LazyLock::new(|| RwLock::new(PathBuf::from("/")));
 
 pub fn current_dir() -> io::Result<PathBuf> {
-    let cwd = CWD
+    let cwd = CURRENT_DIR
         .read()
         .map_err(|_| io::Error::from(io::ErrorKind::Deadlock))?;
 
@@ -15,7 +15,7 @@ pub fn current_dir() -> io::Result<PathBuf> {
 }
 
 pub fn set_current_dir<P: AsRef<Path>>(path: P) -> io::Result<()> {
-    let mut cwd = CWD
+    let mut cwd = CURRENT_DIR
         .write()
         .map_err(|_| io::Error::from(io::ErrorKind::Deadlock))?;
 
