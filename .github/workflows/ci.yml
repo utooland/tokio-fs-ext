@@ -28,3 +28,10 @@ jobs:
           cargo test --target wasm32-unknown-unknown
         env:
           RUST_BACKTRACE: 1
+
+      - name: Run build
+        run: |
+          cargo build
+          cargo build --target wasm32-unknown-unknown
+        env:
+          RUST_BACKTRACE: 1
