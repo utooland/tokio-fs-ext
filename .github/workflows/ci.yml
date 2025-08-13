@@ -26,6 +26,7 @@ jobs:
 
       - name: Run tests
         run: |
+          chmod +x $(which wasm-bindgen-test-runner)
           cargo test
           cargo test --target wasm32-unknown-unknown
         env:
