@@ -1,7 +1,6 @@
 use std::io;
 
-use super::opfs::{CreateFileMode, SyncAccessMode};
-use crate::fs::opfs::{open_dir, open_file};
+use super::opfs::{CreateFileMode, SyncAccessMode, open_dir, open_file};
 
 pub async fn try_exists(path: impl AsRef<std::path::Path>) -> io::Result<bool> {
     Ok(open_file(

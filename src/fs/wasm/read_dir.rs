@@ -15,9 +15,9 @@ use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::stream::JsStream;
 use web_sys::FileSystemHandle;
 
-use crate::fs::{
+use super::{
+    metadata::FileType,
     opfs::{OpfsError, open_dir},
-    wasm::metadata::FileType,
 };
 
 pub async fn read_dir(path: impl AsRef<Path>) -> io::Result<ReadDir> {

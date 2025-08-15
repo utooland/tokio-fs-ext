@@ -10,11 +10,10 @@ use futures::io::{AsyncRead, AsyncSeek, AsyncWrite};
 use send_wrapper::SendWrapper;
 use web_sys::{FileSystemReadWriteOptions, FileSystemSyncAccessHandle};
 
-use super::{metadata::FileType, opfs::SyncAccessMode};
-use crate::fs::{
+use super::{
     OpenOptions,
-    opfs::{OpfsError, open_file},
-    wasm::metadata::Metadata,
+    metadata::{FileType, Metadata},
+    opfs::{OpfsError, SyncAccessMode, open_file},
 };
 
 #[derive(Debug)]

@@ -1,6 +1,6 @@
 use std::{io, path::Path};
 
-use crate::fs::{read, write};
+use super::{read, write};
 
 pub async fn copy(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<u64, io::Error> {
     if from.as_ref() == to.as_ref() {

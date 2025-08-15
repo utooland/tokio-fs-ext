@@ -2,7 +2,7 @@ use std::{io, path::Path};
 
 use futures::io::AsyncSeekExt;
 
-use crate::fs::OpenOptions;
+use super::OpenOptions;
 
 pub async fn write(path: impl AsRef<Path>, contents: impl AsRef<[u8]>) -> io::Result<()> {
     let mut file = OpenOptions::new()

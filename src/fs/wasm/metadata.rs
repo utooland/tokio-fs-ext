@@ -2,7 +2,7 @@ use std::{io, path::Path};
 
 use web_sys::FileSystemHandleKind;
 
-use crate::fs::opfs::{OpfsError, open_dir, open_file};
+use super::opfs::{OpfsError, open_dir, open_file};
 
 /// Symlink is not supported.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]

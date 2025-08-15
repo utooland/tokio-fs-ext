@@ -1,6 +1,6 @@
 use std::{io, path::Path};
 
-use crate::fs::{copy, remove_file};
+use super::{copy, remove_file};
 
 pub async fn rename(from: impl AsRef<Path>, to: impl AsRef<Path>) -> io::Result<()> {
     // TODO: rename dir

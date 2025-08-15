@@ -1,6 +1,6 @@
 use std::{io, path::Path};
 
-use crate::fs::{create_dir, create_dir_all};
+use super::{create_dir, create_dir_all};
 
 #[derive(Debug, Default)]
 pub struct DirBuilder {

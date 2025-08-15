@@ -8,8 +8,6 @@ cfg_if! {
 
         mod wasm;
 
-        pub(crate) use wasm::opfs;
-
         pub use wasm::{ File, OpenOptions, current_dir, set_current_dir };
 
         pub use wasm::{

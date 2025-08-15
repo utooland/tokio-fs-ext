@@ -1,8 +1,8 @@
 use std::{io, path::Path};
 
-use crate::fs::opfs::open_dir;
+use super::opfs::{OpenDirType, open_dir};
 
 pub async fn create_dir_all(path: impl AsRef<Path>) -> io::Result<()> {
-    open_dir(path, super::opfs::OpenDirType::CreateRecursive).await?;
+    open_dir(path, OpenDirType::CreateRecursive).await?;
     Ok(())
 }

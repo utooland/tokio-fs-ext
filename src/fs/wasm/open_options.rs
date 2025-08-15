@@ -3,7 +3,7 @@ use std::{io, path::Path};
 use bitflags::bitflags;
 use futures::io::AsyncSeekExt;
 
-use crate::fs::{
+use super::{
     File,
     opfs::{CreateFileMode, SyncAccessMode, open_file},
 };
