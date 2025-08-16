@@ -19,11 +19,12 @@ use super::{
     virtualize,
 };
 
+#[tracing::instrument(level = "trace", fields(path = %path.as_ref().to_string_lossy()))]
 pub(crate) async fn open_file(
     path: impl AsRef<Path>,
     create: CreateFileMode,
-    truncate: bool,
     mode: SyncAccessMode,
+    truncate: bool,
 ) -> io::Result<File> {
     let virt = virtualize::virtualize(&path)?;
 
