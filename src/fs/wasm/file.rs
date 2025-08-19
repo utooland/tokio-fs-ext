@@ -7,7 +7,6 @@ use std::{
 };
 
 use futures::io::{AsyncRead, AsyncSeek, AsyncWrite};
-use send_wrapper::SendWrapper;
 use web_sys::{FileSystemReadWriteOptions, FileSystemSyncAccessHandle};
 
 use super::{
@@ -18,7 +17,7 @@ use super::{
 
 #[derive(Debug)]
 pub struct File {
-    pub(super) sync_access_handle: SendWrapper<FileSystemSyncAccessHandle>,
+    pub(super) sync_access_handle: FileSystemSyncAccessHandle,
     pub(super) pos: Mutex<u64>,
 }
 

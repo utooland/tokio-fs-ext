@@ -505,18 +505,6 @@ async fn test_async_seek() {
     let _ = remove_dir_all(base_dir).await;
 }
 
-async fn thread_safe_guard<R>(fut: impl Future<Output = R> + Send + Sync + 'static) -> R {
-    fut.await
-}
-
-#[wasm_bindgen_test]
-async fn test_thread_safe_guard() {
-    let _ = thread_safe_guard(async {
-        let _ = read("thread_safe_guard").await;
-    })
-    .await;
-}
-
 #[wasm_bindgen_test]
 async fn test_current_dir() {
     assert_eq!(current_dir().unwrap().to_string_lossy(), "/");

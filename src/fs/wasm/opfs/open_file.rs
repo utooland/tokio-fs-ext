@@ -1,7 +1,6 @@
 use std::{io, path::Path, sync::Mutex};
 
 use js_sys::{Function, Promise, Reflect};
-use send_wrapper::SendWrapper;
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
@@ -62,21 +61,19 @@ pub(crate) async fn open_file(
 
 async fn get_file_handle(
     name: &str,
-    dir_entry: &SendWrapper<FileSystemDirectoryHandle>,
+    dir_entry: &FileSystemDirectoryHandle,
     mode: SyncAccessMode,
     create: bool,
     truncate: bool,
-) -> Result<SendWrapper<FileSystemSyncAccessHandle>, io::Error> {
-    let option = SendWrapper::new(FileSystemGetFileOptions::new());
+) -> Result<FileSystemSyncAccessHandle, io::Error> {
+    let option = FileSystemGetFileOptions::new();
     option.set_create(create);
-    let file_handle = SendWrapper::new(JsFuture::from(
-        dir_entry.get_file_handle_with_options(name, &option),
-    ))
-    .await
-    .map_err(|err| OpfsError::from(err).into_io_err())?
-    .unchecked_into::<FileSystemFileHandle>();
+    let file_handle = JsFuture::from(dir_entry.get_file_handle_with_options(name, &option))
+        .await
+        .map_err(|err| OpfsError::from(err).into_io_err())?
+        .unchecked_into::<FileSystemFileHandle>();
 
-    let file_handle_js_value = SendWrapper::new(JsValue::from(file_handle));
+    let file_handle_js_value = JsValue::from(file_handle);
 
     let promise = Reflect::get(&file_handle_js_value, &"createSyncAccessHandle".into())
         .map_err(|err| OpfsError::from(err).into_io_err())?
@@ -88,7 +85,7 @@ async fn get_file_handle(
         .map_err(|err| OpfsError::from(err).into_io_err())?
         .unchecked_into::<Promise>();
 
-    let sync_access_handle = SendWrapper::new(JsFuture::from(promise))
+    let sync_access_handle = JsFuture::from(promise)
         .await
         .map_err(|err| OpfsError::from(err).into_io_err())?
         .unchecked_into::<FileSystemSyncAccessHandle>();
@@ -98,5 +95,5 @@ async fn get_file_handle(
             .truncate_with_u32(0)
             .map_err(|err| OpfsError::from(err).into_io_err())?;
     }
-    Ok(SendWrapper::new(sync_access_handle))
+    Ok(sync_access_handle)
 }

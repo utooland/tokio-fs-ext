@@ -4,7 +4,6 @@ use std::{
     path::{Component, Path},
 };
 
-use send_wrapper::SendWrapper;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{FileSystemDirectoryHandle, FileSystemGetDirectoryOptions};
@@ -21,7 +20,7 @@ use super::{
 pub(crate) async fn open_dir(
     path: impl AsRef<Path>,
     r#type: OpenDirType,
-) -> io::Result<SendWrapper<FileSystemDirectoryHandle>> {
+) -> io::Result<FileSystemDirectoryHandle> {
     let virt = virtualize::virtualize(path)?;
 
     if let Some(handle) = get_cached_dir_handle(&virt) {
@@ -71,18 +70,16 @@ pub(crate) async fn open_dir(
 }
 
 async fn get_dir_handle(
-    parent: &SendWrapper<FileSystemDirectoryHandle>,
+    parent: &FileSystemDirectoryHandle,
     path: &str,
     create: bool,
-) -> io::Result<SendWrapper<FileSystemDirectoryHandle>> {
-    let options = SendWrapper::new(FileSystemGetDirectoryOptions::new());
+) -> io::Result<FileSystemDirectoryHandle> {
+    let options = FileSystemGetDirectoryOptions::new();
     options.set_create(create);
 
-    let dir_handle = SendWrapper::new(JsFuture::from(
-        parent.get_directory_handle_with_options(path, &options),
-    ))
-    .await
-    .map_err(|err| OpfsError::from(err).into_io_err())?
-    .unchecked_into::<FileSystemDirectoryHandle>();
-    Ok(SendWrapper::new(dir_handle))
+    let dir_handle = JsFuture::from(parent.get_directory_handle_with_options(path, &options))
+        .await
+        .map_err(|err| OpfsError::from(err).into_io_err())?
+        .unchecked_into::<FileSystemDirectoryHandle>();
+    Ok(dir_handle)
 }

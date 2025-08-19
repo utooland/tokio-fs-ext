@@ -50,7 +50,6 @@ wasm-bindgen-futures = { version = "0.4.50", features = [
   "futures-core-03-stream",
 ] }
 tokio = { version = "1.46.1", default-features = false, features = ["sync"] }
-send_wrapper = { version = "0.6.0", features = ["futures"] }
 bitflags = "2.9.1"
 rustc-hash = "2.1.1"
 tracing = "0.1.41"

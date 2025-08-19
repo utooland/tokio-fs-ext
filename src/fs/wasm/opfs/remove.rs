@@ -1,6 +1,5 @@
 use std::{io, path::Path};
 
-use send_wrapper::SendWrapper;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::FileSystemRemoveOptions;
 
@@ -25,14 +24,12 @@ pub(crate) async fn remove(path: impl AsRef<Path>, recursive: bool) -> io::Resul
         None => root().await?,
     };
 
-    let options = SendWrapper::new(FileSystemRemoveOptions::new());
+    let options = FileSystemRemoveOptions::new();
     options.set_recursive(recursive);
 
-    SendWrapper::new(JsFuture::from(
-        dir_entry.remove_entry_with_options(&name, &options),
-    ))
-    .await
-    .map_err(|err| OpfsError::from(err).into_io_err())?;
+    JsFuture::from(dir_entry.remove_entry_with_options(&name, &options))
+        .await
+        .map_err(|err| OpfsError::from(err).into_io_err())?;
 
     remove_cached_dir_handle(&virt, recursive);
 

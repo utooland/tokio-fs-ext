@@ -1,22 +1,19 @@
 use std::{path::PathBuf, sync::LazyLock};
 
 use rustc_hash::FxHashMap;
-use send_wrapper::SendWrapper;
 use web_sys::FileSystemDirectoryHandle;
 
-static mut DIR_HANDLE_CACHE: LazyLock<FxHashMap<PathBuf, SendWrapper<FileSystemDirectoryHandle>>> =
+static mut DIR_HANDLE_CACHE: LazyLock<FxHashMap<PathBuf, FileSystemDirectoryHandle>> =
     LazyLock::new(FxHashMap::default);
 
-pub(super) fn get_cached_dir_handle(
-    path: &PathBuf,
-) -> Option<SendWrapper<FileSystemDirectoryHandle>> {
+pub(super) fn get_cached_dir_handle(path: &PathBuf) -> Option<FileSystemDirectoryHandle> {
     unsafe {
         #[allow(static_mut_refs)]
         DIR_HANDLE_CACHE.get(path).cloned()
     }
 }
 
-pub(super) fn set_cached_dir_handle(path: PathBuf, handle: SendWrapper<FileSystemDirectoryHandle>) {
+pub(super) fn set_cached_dir_handle(path: PathBuf, handle: FileSystemDirectoryHandle) {
     unsafe {
         #[allow(static_mut_refs)]
         DIR_HANDLE_CACHE.insert(path.clone(), handle);
