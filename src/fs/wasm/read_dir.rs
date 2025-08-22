@@ -8,9 +8,9 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures::stream::StreamExt;
+use futures::{TryStreamExt, stream::StreamExt};
 use js_sys::{Array, JsString};
-use wasm_bindgen::{JsCast, JsValue};
+use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::stream::JsStream;
 use web_sys::FileSystemHandle;
 
@@ -21,66 +21,57 @@ use super::{
 
 pub async fn read_dir(path: impl AsRef<Path>) -> io::Result<ReadDir> {
     let dir_handle = open_dir(&path, super::opfs::OpenDirType::NotCreate).await?;
-    Ok(ReadDir {
-        path: path.as_ref().into(),
-        stream: JsStream::from(dir_handle.entries()),
-    })
+    let entries = JsStream::from(dir_handle.entries())
+        .map(|handle| {
+            handle.map_or_else(
+                |err| Err(OpfsError::from(err).into_io_err()),
+                |entry| {
+                    Ok({
+                        let js_array = Array::from(&entry);
+
+                        let name = OsString::from_str(
+                            JsString::from(js_array.get(0))
+                                .as_string()
+                                .ok_or(io::Error::from(io::ErrorKind::InvalidFilename))?
+                                .as_str(),
+                        )
+                        .map_err(|_| io::Error::from(io::ErrorKind::InvalidFilename))?;
+
+                        let path = path.as_ref().join(&name);
+
+                        let file_type = js_array
+                            .get(1)
+                            .unchecked_into::<FileSystemHandle>()
+                            .kind()
+                            .into();
+
+                        DirEntry {
+                            file_type,
+                            path,
+                            name,
+                        }
+                    })
+                },
+            )
+        })
+        .try_collect()
+        .await?;
+
+    Ok(ReadDir { entries })
 }
 
-#[must_use = "streams do nothing unless polled"]
+#[derive(Debug)]
 pub struct ReadDir {
-    path: PathBuf,
-    pub(super) stream: JsStream,
-}
-
-impl Debug for ReadDir {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ReadDir").field("path", &self.path).finish()
-    }
+    pub(crate) entries: Vec<DirEntry>,
 }
 
 impl ReadDir {
     pub async fn next_entry(&mut self) -> io::Result<Option<DirEntry>> {
-        match self.stream.next().await {
-            Some(next) => match next {
-                Ok(next) => Ok(Some(self.process_entry(&next)?)),
-                Err(err) => Err(OpfsError::from(err).into_io_err()),
-            },
-            None => Ok(None),
-        }
+        Ok(self.entries.pop())
     }
 
-    pub fn poll_next_entry(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<Option<DirEntry>>> {
-        match self.stream.poll_next_unpin(cx) {
-            Poll::Ready(next) => match next {
-                Some(next) => match next {
-                    Ok(next) => Poll::Ready(Ok(Some(self.process_entry(&next)?))),
-                    Err(err) => Poll::Ready(Err(OpfsError::from(err).into_io_err())),
-                },
-                None => Poll::Ready(Ok(None)),
-            },
-            Poll::Pending => Poll::Pending,
-        }
-    }
-
-    fn process_entry(&self, entry: &JsValue) -> io::Result<DirEntry> {
-        let js_array = Array::from(entry);
-
-        let name = OsString::from_str(
-            JsString::from(js_array.get(0))
-                .as_string()
-                .ok_or(io::Error::from(io::ErrorKind::InvalidFilename))?
-                .as_str(),
-        )
-        .map_err(|_| io::Error::from(io::ErrorKind::InvalidFilename))?;
-
-        let handle = js_array.get(1).unchecked_into::<FileSystemHandle>();
-
-        Ok(DirEntry {
-            file_type: handle.kind().into(),
-            path: self.path.join(&name),
-            name,
-        })
+    pub fn poll_next_entry(&mut self, _cx: &mut Context<'_>) -> Poll<io::Result<Option<DirEntry>>> {
+        Poll::Ready(Ok(self.entries.pop()))
     }
 }
 

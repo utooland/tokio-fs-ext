@@ -28,8 +28,8 @@ impl ReadDirStream {
 impl Stream for ReadDirStream {
     type Item = io::Result<DirEntry>;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.inner.poll_next_entry(cx).map(Result::transpose)
+    fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        Poll::Ready(self.inner.entries.pop().map(Result::Ok))
     }
 }
 
