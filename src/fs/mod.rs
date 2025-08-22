@@ -1,8 +1,4 @@
 use cfg_if::cfg_if;
-mod read_dir_stream;
-
-pub use read_dir_stream::ReadDirStream;
-
 cfg_if! {
     if #[cfg(all(target_family = "wasm", target_os = "unknown"))] {
 
@@ -18,6 +14,10 @@ cfg_if! {
 
         pub use wasm::{Metadata, symlink};
 
+        pub use wasm::ReadDirStream;
+
+        pub use wasm::offload;
+
     } else if #[cfg(any(target_family = "unix", target_family = "windows"))] {
 
         mod native;
@@ -29,6 +29,8 @@ cfg_if! {
             metadata, read, read_dir, read_link, read_to_string, remove_dir, remove_dir_all, remove_file,
             rename, symlink_metadata, try_exists, write,
         };
+
+        pub use tokio_stream::wrappers::ReadDirStream;
 
         pub use std::fs::Metadata;
 
