@@ -51,7 +51,7 @@ macro_rules! impl_fs_task_execute {
         [ $( ($variant:ident, $method:ident, ( $( $arg:ident : $arg_type:ty ),* ) ) ),* ]
     ) => {
         impl $task_enum {
-            pub async fn execute(self, offload: &impl $offload_trait) {
+            pub(super) async fn execute(self, offload: &impl $offload_trait) {
                 match self {
                     $(
                         $task_enum::$variant { $( $arg, )* sender } => {
