@@ -2,7 +2,7 @@ use std::{io, path::PathBuf};
 
 use tokio::sync::oneshot;
 
-use super::{Metadata, ReadDir};
+use super::{FsOffload, Metadata, ReadDir};
 
 pub enum FsTask {
     Read {
@@ -43,3 +43,39 @@ pub enum FsTask {
         sender: oneshot::Sender<io::Result<Metadata>>,
     },
 }
+
+macro_rules! impl_fs_task_execute {
+    (
+        $offload_trait:ident,
+        $task_enum:ident,
+        [ $( ($variant:ident, $method:ident, ( $( $arg:ident : $arg_type:ty ),* ) ) ),* ]
+    ) => {
+        impl $task_enum {
+            pub async fn execute(self, offload: &impl $offload_trait) {
+                match self {
+                    $(
+                        $task_enum::$variant { $( $arg, )* sender } => {
+                            let _ = sender.send(offload.$method( $( $arg ),* ).await);
+                        }
+                    )*
+                }
+            }
+        }
+    };
+}
+
+impl_fs_task_execute!(
+    FsOffload,
+    FsTask,
+    [
+        (Read, read, (path: PathBuf)),
+        (Write, write, (path: PathBuf, content: Vec<u8>)),
+        (ReadDir, read_dir, (path: PathBuf)),
+        (CreateDir, create_dir, (path: PathBuf)),
+        (CreateDirAll, create_dir_all, (path: PathBuf)),
+        (RemoveFile, remove_file, (path: PathBuf)),
+        (RemoveDir, remove_dir, (path: PathBuf)),
+        (RemoveDirAll, remove_dir_all, (path: PathBuf)),
+        (Metadata, metadata, (path: PathBuf))
+    ]
+);
