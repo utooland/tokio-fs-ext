@@ -1,6 +1,6 @@
 use tokio::sync::mpsc;
 
-use super::{FsOffload, FsTask};
+use super::{FsOffload, FsOffloadDefault, FsTask};
 
 pub struct Server {
     pub(super) receiver: mpsc::Receiver<FsTask>,
@@ -11,5 +11,9 @@ impl Server {
         while let Some(task) = self.receiver.recv().await {
             task.execute(&offload).await;
         }
+    }
+
+    pub async fn serve_default(&mut self) {
+        self.serve(FsOffloadDefault).await
     }
 }

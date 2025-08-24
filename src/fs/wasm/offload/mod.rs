@@ -1,4 +1,4 @@
-use std::{io, path::PathBuf};
+use std::{io, path::Path};
 
 use tokio::sync::mpsc;
 
@@ -20,53 +20,53 @@ pub fn split() -> (Server, Client) {
 
 #[allow(async_fn_in_trait)]
 pub trait FsOffload {
-    async fn read(&self, path: PathBuf) -> io::Result<Vec<u8>>;
-    async fn write(&self, path: PathBuf, content: Vec<u8>) -> io::Result<()>;
-    async fn read_dir(&self, path: PathBuf) -> io::Result<ReadDir>;
-    async fn create_dir(&self, path: PathBuf) -> io::Result<()>;
-    async fn create_dir_all(&self, path: PathBuf) -> io::Result<()>;
-    async fn remove_file(&self, path: PathBuf) -> io::Result<()>;
-    async fn remove_dir(&self, path: PathBuf) -> io::Result<()>;
-    async fn remove_dir_all(&self, path: PathBuf) -> io::Result<()>;
-    async fn metadata(&self, path: PathBuf) -> io::Result<Metadata>;
+    async fn read(&self, path: impl AsRef<Path>) -> io::Result<Vec<u8>>;
+    async fn write(&self, path: impl AsRef<Path>, content: impl AsRef<[u8]>) -> io::Result<()>;
+    async fn read_dir(&self, path: impl AsRef<Path>) -> io::Result<ReadDir>;
+    async fn create_dir(&self, path: impl AsRef<Path>) -> io::Result<()>;
+    async fn create_dir_all(&self, path: impl AsRef<Path>) -> io::Result<()>;
+    async fn remove_file(&self, path: impl AsRef<Path>) -> io::Result<()>;
+    async fn remove_dir(&self, path: impl AsRef<Path>) -> io::Result<()>;
+    async fn remove_dir_all(&self, path: impl AsRef<Path>) -> io::Result<()>;
+    async fn metadata(&self, path: impl AsRef<Path>) -> io::Result<Metadata>;
 }
 
 pub struct FsOffloadDefault;
 
 impl FsOffload for FsOffloadDefault {
-    async fn read(&self, path: PathBuf) -> io::Result<Vec<u8>> {
+    async fn read(&self, path: impl AsRef<Path>) -> io::Result<Vec<u8>> {
         read(path).await
     }
 
-    async fn write(&self, path: PathBuf, content: Vec<u8>) -> io::Result<()> {
+    async fn write(&self, path: impl AsRef<Path>, content: impl AsRef<[u8]>) -> io::Result<()> {
         write(path, content).await
     }
 
-    async fn read_dir(&self, path: PathBuf) -> io::Result<ReadDir> {
+    async fn read_dir(&self, path: impl AsRef<Path>) -> io::Result<ReadDir> {
         read_dir(path).await
     }
 
-    async fn create_dir(&self, path: PathBuf) -> io::Result<()> {
+    async fn create_dir(&self, path: impl AsRef<Path>) -> io::Result<()> {
         create_dir(path).await
     }
 
-    async fn create_dir_all(&self, path: PathBuf) -> io::Result<()> {
+    async fn create_dir_all(&self, path: impl AsRef<Path>) -> io::Result<()> {
         create_dir_all(path).await
     }
 
-    async fn remove_file(&self, path: PathBuf) -> io::Result<()> {
+    async fn remove_file(&self, path: impl AsRef<Path>) -> io::Result<()> {
         remove_file(path).await
     }
 
-    async fn remove_dir(&self, path: PathBuf) -> io::Result<()> {
+    async fn remove_dir(&self, path: impl AsRef<Path>) -> io::Result<()> {
         remove_dir(path).await
     }
 
-    async fn remove_dir_all(&self, path: PathBuf) -> io::Result<()> {
+    async fn remove_dir_all(&self, path: impl AsRef<Path>) -> io::Result<()> {
         remove_dir_all(path).await
     }
 
-    async fn metadata(&self, path: PathBuf) -> io::Result<Metadata> {
+    async fn metadata(&self, path: impl AsRef<Path>) -> io::Result<Metadata> {
         metadata(path).await
     }
 }

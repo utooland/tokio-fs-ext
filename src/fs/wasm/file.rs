@@ -91,7 +91,7 @@ impl File {
         Ok(size)
     }
 
-    pub(crate) fn write_with_buf(&self, buf: &[u8]) -> io::Result<u64> {
+    pub(crate) fn write_with_buf(&self, buf: impl AsRef<[u8]>) -> io::Result<u64> {
         let options = FileSystemReadWriteOptions::new();
         options.set_at(*self.pos.lock().unwrap() as f64);
         let size = self

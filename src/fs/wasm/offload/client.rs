@@ -15,9 +15,9 @@ impl Client {
         self.dispatch(|sender| FsTask::Read { path, sender }).await
     }
 
-    pub async fn write(&self, path: impl AsRef<Path>, content: &[u8]) -> io::Result<()> {
+    pub async fn write(&self, path: impl AsRef<Path>, content: impl AsRef<[u8]>) -> io::Result<()> {
         let path = path.as_ref().into();
-        let content = content.to_vec();
+        let content = content.as_ref().to_vec();
         self.dispatch(|sender| FsTask::Write {
             path,
             sender,
