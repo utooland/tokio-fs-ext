@@ -58,7 +58,7 @@ async fn test_dir_read_dir_contents() {
 
     while let Some(e) = rd.next_entry().await.unwrap() {
         entries.push((
-            e.file_type().await.unwrap().is_dir(),
+            e.file_type().unwrap().is_dir(),
             e.file_name().to_string_lossy().to_string(),
         ));
     }
@@ -97,7 +97,7 @@ async fn test_dir_read_dir_stream() {
             .iter()
             .map(async |e| {
                 (
-                    e.file_type().await.unwrap().is_dir(),
+                    e.file_type().unwrap().is_dir(),
                     e.file_name().to_string_lossy().to_string(),
                 )
             }),

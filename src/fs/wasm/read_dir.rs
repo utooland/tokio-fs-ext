@@ -62,7 +62,7 @@ pub async fn read_dir(path: impl AsRef<Path>) -> io::Result<ReadDir> {
 
 #[derive(Debug)]
 pub struct ReadDir {
-    pub(crate) entries: Vec<DirEntry>,
+    entries: Vec<DirEntry>,
 }
 
 impl ReadDir {
@@ -72,6 +72,14 @@ impl ReadDir {
 
     pub fn poll_next_entry(&mut self, _cx: &mut Context<'_>) -> Poll<io::Result<Option<DirEntry>>> {
         Poll::Ready(Ok(self.entries.pop()))
+    }
+}
+
+impl Iterator for ReadDir {
+    type Item = io::Result<DirEntry>;
+
+    fn next(&mut self) -> Option<io::Result<DirEntry>> {
+        self.entries.pop().map(Result::Ok)
     }
 }
 
@@ -91,7 +99,7 @@ impl DirEntry {
         self.name.clone()
     }
 
-    pub async fn file_type(&self) -> io::Result<FileType> {
+    pub fn file_type(&self) -> io::Result<FileType> {
         Ok(self.file_type)
     }
 
