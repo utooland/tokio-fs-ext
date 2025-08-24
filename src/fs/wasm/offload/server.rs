@@ -7,7 +7,7 @@ pub struct Server {
 }
 
 impl Server {
-    pub async fn serve(mut self, offload: impl FsOffload) {
+    pub async fn serve(&mut self, offload: impl FsOffload) {
         while let Some(task) = self.receiver.recv().await {
             task.execute(&offload).await;
         }
