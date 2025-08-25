@@ -83,6 +83,14 @@ impl Iterator for ReadDir {
     }
 }
 
+impl FromIterator<DirEntry> for ReadDir {
+    fn from_iter<T: IntoIterator<Item = DirEntry>>(iter: T) -> Self {
+        ReadDir {
+            entries: iter.into_iter().collect(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct DirEntry {
     file_type: FileType,
