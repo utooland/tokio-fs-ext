@@ -3,7 +3,7 @@ use std::{io, path::Path};
 use tokio::sync::mpsc;
 
 use super::{
-    Metadata, ReadDir, create_dir, create_dir_all, metadata, read, read_dir, remove_dir,
+    Metadata, ReadDir, copy, create_dir, create_dir_all, metadata, read, read_dir, remove_dir,
     remove_dir_all, remove_file, write,
 };
 
@@ -22,6 +22,7 @@ pub fn split() -> (Server, Client) {
 pub trait FsOffload {
     async fn read(&self, path: impl AsRef<Path>) -> io::Result<Vec<u8>>;
     async fn write(&self, path: impl AsRef<Path>, content: impl AsRef<[u8]>) -> io::Result<()>;
+    async fn copy(&self, from: impl AsRef<Path>, to: impl AsRef<Path>) -> io::Result<u64>;
     async fn read_dir(&self, path: impl AsRef<Path>) -> io::Result<ReadDir>;
     async fn create_dir(&self, path: impl AsRef<Path>) -> io::Result<()>;
     async fn create_dir_all(&self, path: impl AsRef<Path>) -> io::Result<()>;
@@ -40,6 +41,10 @@ impl FsOffload for FsOffloadDefault {
 
     async fn write(&self, path: impl AsRef<Path>, content: impl AsRef<[u8]>) -> io::Result<()> {
         write(path, content).await
+    }
+
+    async fn copy(&self, from: impl AsRef<Path>, to: impl AsRef<Path>) -> io::Result<u64> {
+        copy(from, to).await
     }
 
     async fn read_dir(&self, path: impl AsRef<Path>) -> io::Result<ReadDir> {

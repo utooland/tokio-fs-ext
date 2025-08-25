@@ -14,6 +14,11 @@ pub enum FsTask {
         content: Vec<u8>,
         sender: oneshot::Sender<io::Result<()>>,
     },
+    Copy {
+        from: PathBuf,
+        to: PathBuf,
+        sender: oneshot::Sender<io::Result<u64>>,
+    },
     ReadDir {
         path: PathBuf,
         sender: oneshot::Sender<io::Result<ReadDir>>,
@@ -70,6 +75,7 @@ impl_fs_task_execute!(
     [
         (Read, read, (path: PathBuf)),
         (Write, write, (path: PathBuf, content: Vec<u8>)),
+        (Copy, copy, (from: PathBuf, to: PathBuf)),
         (ReadDir, read_dir, (path: PathBuf)),
         (CreateDir, create_dir, (path: PathBuf)),
         (CreateDirAll, create_dir_all, (path: PathBuf)),
