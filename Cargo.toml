@@ -1,6 +1,6 @@
 [package]
 name = "tokio-fs-ext"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2024"
 authors = ["xusd320"]
 description = "Extend tokio fs to be compatible with native and wasm"
