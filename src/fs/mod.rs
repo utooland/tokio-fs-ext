@@ -16,6 +16,7 @@ cfg_if! {
 
         pub use wasm::ReadDirStream;
 
+        #[cfg(feature = "wasm_offload")]
         pub use wasm::offload;
 
     } else if #[cfg(any(target_family = "unix", target_family = "windows"))] {

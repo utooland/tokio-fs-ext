@@ -12,6 +12,9 @@ keywords = ["tokio", "fs", "wasm", "opfs"]
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+wasm_offload = ["tokio/sync"]
+
 [dependencies]
 futures = "0.3.31"
 cfg-if = "1.0.1"
@@ -50,7 +53,7 @@ wasm-bindgen = { version = "0.2.100", default-features = false }
 wasm-bindgen-futures = { version = "0.4.50", features = [
   "futures-core-03-stream",
 ] }
-tokio = { version = "1.46.1", default-features = false, features = ["sync"] }
+tokio = { version = "1.46.1", default-features = false, optional = true }
 bitflags = "2.9.1"
 rustc-hash = "2.1.1"
 tracing = "0.1.41"
