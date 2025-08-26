@@ -1,7 +1,7 @@
 use std::{
     borrow::Cow,
     io,
-    path::{Component, Path},
+    path::{Component, Path, PathBuf},
 };
 
 use wasm_bindgen::JsCast;
@@ -41,8 +41,9 @@ pub(crate) async fn open_dir(
 
     let mut found = 0_usize;
 
+    let mut cur_virt = PathBuf::from("/");
     for c in components.iter() {
-        let cur_virt = virt.join(c.as_ref());
+        cur_virt = cur_virt.join(c.as_ref());
         dir_handle = if let Some(handle) = get_cached_dir_handle(&cur_virt) {
             handle
         } else {
@@ -53,7 +54,7 @@ pub(crate) async fn open_dir(
             )
             .await?;
 
-            set_cached_dir_handle(cur_virt, dir_handle.clone());
+            set_cached_dir_handle(cur_virt.clone(), dir_handle.clone());
             dir_handle
         };
 
@@ -63,8 +64,6 @@ pub(crate) async fn open_dir(
     if found != total_depth {
         return Err(io::Error::from(io::ErrorKind::NotFound));
     }
-
-    set_cached_dir_handle(virt, dir_handle.clone());
 
     Ok(dir_handle)
 }
