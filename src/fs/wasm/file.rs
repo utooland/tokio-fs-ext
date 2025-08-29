@@ -2,7 +2,6 @@ use std::{
     io::{self, SeekFrom},
     path::Path,
     pin::Pin,
-    sync::Mutex,
     task::{Context, Poll},
 };
 
@@ -18,7 +17,7 @@ use super::{
 #[derive(Debug)]
 pub struct File {
     pub(super) sync_access_handle: FileSystemSyncAccessHandle,
-    pub(super) pos: Mutex<u64>,
+    pub(super) pos: Option<u64>,
 }
 
 impl File {
@@ -81,27 +80,53 @@ impl File {
 }
 
 impl File {
-    pub(crate) fn read_with_buf(&self, buf: &mut [u8]) -> io::Result<u64> {
-        let options = FileSystemReadWriteOptions::new();
-        options.set_at(*self.pos.lock().unwrap() as f64);
-        let size = self
-            .sync_access_handle
-            .read_with_u8_array_and_options(buf, &options)
-            .map_err(|err| OpfsError::from(err).into_io_err())? as u64;
-        Ok(size)
+    pub(crate) fn read_to_buf(&mut self, buf: &mut [u8]) -> io::Result<u64> {
+        match self.pos {
+            Some(pos) => {
+                let options = FileSystemReadWriteOptions::new();
+                options.set_at(pos as f64);
+                let size = self
+                    .sync_access_handle
+                    .read_with_u8_array_and_options(buf, &options)
+                    .map_err(|err| OpfsError::from(err).into_io_err())?
+                    as u64;
+                Ok(size)
+            }
+            None => {
+                let size = self
+                    .sync_access_handle
+                    .read_with_u8_array(buf)
+                    .map_err(|err| OpfsError::from(err).into_io_err())?
+                    as u64;
+                Ok(size)
+            }
+        }
     }
 
-    pub(crate) fn write_with_buf(&self, buf: impl AsRef<[u8]>) -> io::Result<u64> {
-        let options = FileSystemReadWriteOptions::new();
-        options.set_at(*self.pos.lock().unwrap() as f64);
-        let size = self
-            .sync_access_handle
-            .write_with_u8_array_and_options(buf.as_ref(), &options)
-            .map_err(|err| OpfsError::from(err).into_io_err())? as u64;
-        Ok(size)
+    pub(crate) fn write_with_buf(&mut self, buf: impl AsRef<[u8]>) -> io::Result<u64> {
+        match self.pos {
+            Some(pos) => {
+                let options = FileSystemReadWriteOptions::new();
+                options.set_at(pos as f64);
+                let size = self
+                    .sync_access_handle
+                    .write_with_u8_array_and_options(buf.as_ref(), &options)
+                    .map_err(|err| OpfsError::from(err).into_io_err())?
+                    as u64;
+                Ok(size)
+            }
+            None => {
+                let size = self
+                    .sync_access_handle
+                    .write_with_u8_array(buf.as_ref())
+                    .map_err(|err| OpfsError::from(err).into_io_err())?
+                    as u64;
+                Ok(size)
+            }
+        }
     }
 
-    pub(crate) fn flush(&self) -> io::Result<()> {
+    pub(super) fn flush(&self) -> io::Result<()> {
         self.sync_access_handle
             .flush()
             .map_err(|err| OpfsError::from(err).into_io_err())
@@ -120,29 +145,27 @@ impl Drop for File {
 
 impl AsyncRead for File {
     fn poll_read(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         _cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<io::Result<usize>> {
-        let size = self.read_with_buf(buf)?;
+        let offset = self.read_to_buf(buf)?;
 
-        let mut pos = self.pos.lock().unwrap();
-        *pos += size;
+        self.pos = Some(self.pos.unwrap_or_default() + offset);
 
-        Poll::Ready(Ok(size as usize))
+        Poll::Ready(Ok(offset as usize))
     }
 }
 
 impl AsyncWrite for File {
     fn poll_write(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         _cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<Result<usize, io::Error>> {
         let offset = self.write_with_buf(buf)?;
 
-        let mut pos = self.pos.lock().unwrap();
-        *pos += offset;
+        self.pos = Some(self.pos.unwrap_or_default() + offset);
 
         Poll::Ready(Ok(offset as usize))
     }
@@ -160,27 +183,30 @@ impl AsyncWrite for File {
 
 impl AsyncSeek for File {
     fn poll_seek(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         _cx: &mut Context<'_>,
         position: SeekFrom,
     ) -> Poll<io::Result<u64>> {
-        let mut pos = self.pos.lock().unwrap();
         match position {
             SeekFrom::Start(offset) => {
-                *pos = offset;
+                self.pos = Some(offset);
             }
             SeekFrom::End(offset) => {
-                *pos = self
-                    .size()?
-                    .checked_add_signed(offset)
-                    .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
+                self.pos = Some(
+                    self.size()?
+                        .checked_add_signed(offset)
+                        .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?,
+                );
             }
             SeekFrom::Current(offset) => {
-                *pos = pos
-                    .checked_add_signed(offset)
-                    .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
+                self.pos = Some(
+                    self.pos
+                        .unwrap_or_default()
+                        .checked_add_signed(offset)
+                        .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?,
+                );
             }
         }
-        Poll::Ready(Ok(*pos))
+        Poll::Ready(Ok(self.pos.unwrap_or_default()))
     }
 }

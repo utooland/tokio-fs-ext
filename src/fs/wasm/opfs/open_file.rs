@@ -1,4 +1,4 @@
-use std::{io, path::Path, sync::Mutex};
+use std::{io, path::Path};
 
 use js_sys::{Function, Promise, Reflect};
 use wasm_bindgen::{JsCast, JsValue};
@@ -55,7 +55,7 @@ pub(crate) async fn open_file(
     };
     Ok(File {
         sync_access_handle,
-        pos: Mutex::new(0),
+        pos: None,
     })
 }
 
