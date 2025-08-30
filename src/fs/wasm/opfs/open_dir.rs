@@ -16,7 +16,7 @@ use super::{
     virtualize,
 };
 
-#[tracing::instrument(level = "trace", fields(path = %path.as_ref().to_string_lossy()))]
+#[cfg_attr(feature = "tracing", tracing::instrument(level = "trace", fields(path = %path.as_ref().to_string_lossy())))]
 pub(crate) async fn open_dir(
     path: impl AsRef<Path>,
     r#type: OpenDirType,

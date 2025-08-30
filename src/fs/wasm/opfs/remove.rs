@@ -8,7 +8,7 @@ use super::{
     virtualize,
 };
 
-#[tracing::instrument(level = "trace", fields(path = %path.as_ref().to_string_lossy()))]
+#[cfg_attr(feature = "tracing", tracing::instrument(level = "trace", fields(path = %path.as_ref().to_string_lossy())))]
 pub(crate) async fn remove(path: impl AsRef<Path>, recursive: bool) -> io::Result<()> {
     let virt = virtualize::virtualize(path)?;
 
