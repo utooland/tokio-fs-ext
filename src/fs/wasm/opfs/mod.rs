@@ -6,6 +6,8 @@ mod options;
 mod remove;
 mod root;
 mod virtualize;
+#[cfg(feature = "opfs_watch")]
+pub mod watch;
 
 pub(super) use error::OpfsError;
 pub(super) use open_dir::open_dir;

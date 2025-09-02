@@ -2,6 +2,8 @@ use std::{io, path::PathBuf};
 
 use tokio::sync::oneshot;
 
+#[cfg(feature = "opfs_watch")]
+use super::super::opfs::watch::{event, watch_dir};
 use super::{FsOffload, Metadata, ReadDir};
 
 pub enum FsTask {
@@ -47,18 +49,26 @@ pub enum FsTask {
         path: PathBuf,
         sender: oneshot::Sender<io::Result<Metadata>>,
     },
+    #[cfg(feature = "opfs_watch")]
+    WatchDir {
+        path: PathBuf,
+        recursive: bool,
+        cb: Box<dyn Fn(event::Event) + Send + Sync + 'static>,
+        sender: oneshot::Sender<io::Result<()>>,
+    },
 }
 
 macro_rules! impl_fs_task_execute {
     (
         $offload_trait:ident,
         $task_enum:ident,
-        [ $( ($variant:ident, $method:ident, ( $( $arg:ident : $arg_type:ty ),* ) ) ),* ]
+        [ $( $(#[$attr:meta])* ($variant:ident, $method:ident, ( $( $arg:ident : $arg_type:ty ),* ) ) ),* ]
     ) => {
         impl $task_enum {
             pub(super) async fn execute(self, offload: &impl $offload_trait) {
                 match self {
                     $(
+                        $(#[$attr])*
                         $task_enum::$variant { $( $arg, )* sender } => {
                             let _ = sender.send(offload.$method( $( $arg ),* ).await);
                         }
@@ -82,6 +92,8 @@ impl_fs_task_execute!(
         (RemoveFile, remove_file, (path: PathBuf)),
         (RemoveDir, remove_dir, (path: PathBuf)),
         (RemoveDirAll, remove_dir_all, (path: PathBuf)),
-        (Metadata, metadata, (path: PathBuf))
+        (Metadata, metadata, (path: PathBuf)),
+        #[cfg(feature = "opfs_watch")]
+        (WatchDir, watch_dir, (path: PathBuf, recursive: bool, cb: Box<dyn Fn(event::Event) + Send + Sync + 'static> ))
     ]
 );
