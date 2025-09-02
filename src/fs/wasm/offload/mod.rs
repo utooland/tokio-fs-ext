@@ -2,6 +2,8 @@ use std::{io, path::Path};
 
 use tokio::sync::mpsc;
 
+#[cfg(feature = "opfs_watch")]
+use super::opfs::watch::{event, watch_dir};
 use super::{
     Metadata, ReadDir, copy, create_dir, create_dir_all, metadata, read, read_dir, remove_dir,
     remove_dir_all, remove_file, write,
@@ -30,6 +32,13 @@ pub trait FsOffload {
     async fn remove_dir(&self, path: impl AsRef<Path>) -> io::Result<()>;
     async fn remove_dir_all(&self, path: impl AsRef<Path>) -> io::Result<()>;
     async fn metadata(&self, path: impl AsRef<Path>) -> io::Result<Metadata>;
+    #[cfg(feature = "opfs_watch")]
+    async fn watch_dir(
+        &self,
+        path: impl AsRef<Path>,
+        recursive: bool,
+        cb: impl Fn(event::Event) + Send + Sync + 'static,
+    ) -> io::Result<()>;
 }
 
 pub struct FsOffloadDefault;
@@ -73,5 +82,15 @@ impl FsOffload for FsOffloadDefault {
 
     async fn metadata(&self, path: impl AsRef<Path>) -> io::Result<Metadata> {
         metadata(path).await
+    }
+
+    #[cfg(feature = "opfs_watch")]
+    async fn watch_dir(
+        &self,
+        path: impl AsRef<Path>,
+        recursive: bool,
+        cb: impl Fn(event::Event) + Send + Sync + 'static,
+    ) -> io::Result<()> {
+        watch_dir(path, recursive, cb).await
     }
 }

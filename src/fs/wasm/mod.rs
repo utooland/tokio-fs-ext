@@ -45,5 +45,8 @@ pub use symlink_metadata::symlink_metadata;
 pub use try_exists::try_exists;
 pub use write::write;
 
-#[cfg(feature = "wasm_offload")]
+#[cfg(feature = "opfs_offload")]
 pub mod offload;
+
+#[cfg(feature = "opfs_watch")]
+pub use opfs::watch;
