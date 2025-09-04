@@ -297,15 +297,13 @@ async fn test_open_options_create_succeeds() {
 #[wasm_bindgen_test]
 async fn test_open_options_readonly_permission_denied() {
     let path = "/test_open_options_readonly_permission_denied";
-    let _ = remove_file(path).await;
 
-    let _readonly_file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .open(path)
-        .await
-        .unwrap();
+    {
+        let _ = remove_file(path).await;
+        let _readonly_file = OpenOptions::new().create(true).open(path).await.unwrap();
+    }
+
+    let _readonly_file = OpenOptions::new().read(true).open(path).await.unwrap();
 
     let err = write(path, "attempt to write").await.unwrap_err();
     assert_eq!(err.kind(), io::ErrorKind::PermissionDenied);
