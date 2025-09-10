@@ -93,7 +93,7 @@ impl File {
         if size > 9007199254740991 {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
-                "requested length too large",
+                format!("requested size {size} too large, max allowed is 9007199254740991"),
             ));
         }
         self.sync_access_handle
