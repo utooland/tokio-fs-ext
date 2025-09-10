@@ -90,10 +90,11 @@ impl File {
     /// If the requested length is greater than 9007199254740991 (max safe integer in a floating-point context),
     /// this will produce an error.
     pub async fn set_len(&self, size: u64) -> io::Result<()> {
-        if size > 9007199254740991 {
+        const MAX_SAFE_INT: u64 = js_sys::Number::MAX_SAFE_INTEGER as _;
+        if size > MAX_SAFE_INT {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
-                format!("requested size {size} too large, max allowed is 9007199254740991"),
+                format!("requested size {size} too large, max allowed is {MAX_SAFE_INT}"),
             ));
         }
         self.sync_access_handle
