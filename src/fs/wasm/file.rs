@@ -77,6 +77,29 @@ impl File {
             |size| Ok(size as u64),
         )
     }
+
+    /// Truncates or extends the underlying file, updating the size of this file to become `size`.
+    ///
+    /// If `size` is less than the current file's size, then the file will be shrunk. If it is greater
+    /// than the currrent file's size, then the file will be extended to `size` and have all intermediate
+    /// data filled with 0s.
+    ///
+    /// The file's cursor is not changed. In particular, if the cursor was at the end of the file and
+    /// the file was shrunk using this operation, the cursor will now be past the end.
+    ///
+    /// If the requested length is greater than 9007199254740991 (max safe integer in a floating-point context),
+    /// this will produce an error.
+    pub async fn set_len(&self, size: u64) -> io::Result<()> {
+        if size > 9007199254740991 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "requested length too large",
+            ));
+        }
+        self.sync_access_handle
+            .truncate_with_f64(size as _)
+            .map_err(|err| OpfsError::from(err).into_io_err())
+    }
 }
 
 impl File {

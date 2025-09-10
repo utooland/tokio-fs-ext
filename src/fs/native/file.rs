@@ -56,6 +56,18 @@ impl File {
     pub async fn sync_data(&self) -> io::Result<()> {
         self.inner.sync_data().await
     }
+
+    /// Truncates or extends the underlying file, updating the size of this file to become `size`.
+    ///
+    /// If `size` is less than the current file's size, then the file will be shrunk. If it is greater
+    /// than the currrent file's size, then the file will be extended to `size` and have all intermediate
+    /// data filled with 0s.
+    ///
+    /// The file's cursor is not changed. In particular, if the cursor was at the end of the file and
+    /// the file was shrunk using this operation, the cursor will now be past the end.
+    pub async fn set_len(&self, size: u64) -> io::Result<()> {
+        self.inner.set_len(size).await
+    }
 }
 
 impl futures::io::AsyncRead for File {
