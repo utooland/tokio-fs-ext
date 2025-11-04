@@ -525,3 +525,57 @@ async fn test_current_dir() {
 
     let _ = remove_dir_all(deep_dir).await;
 }
+
+#[wasm_bindgen_test]
+async fn test_write_retry_after_failure() {
+    let path = "/test_write_retry_after_failure/test.txt";
+    let base_dir = "/test_write_retry_after_failure";
+    let _ = remove_dir_all(base_dir).await;
+    create_dir_all(base_dir).await.unwrap();
+
+    // First write should succeed
+    let content1 = b"first write";
+    write(path, content1.as_ref()).await.unwrap();
+    assert_eq!(read(path).await.unwrap(), content1);
+
+    // Second write should also succeed (tests that file handle is properly released)
+    let content2 = b"second write - this tests handle cleanup";
+    write(path, content2.as_ref()).await.unwrap();
+    assert_eq!(read(path).await.unwrap(), content2);
+
+    // Third write to be extra sure
+    let content3 = b"third write";
+    write(path, content3.as_ref()).await.unwrap();
+    assert_eq!(read(path).await.unwrap(), content3);
+
+    let _ = remove_dir_all(base_dir).await;
+}
+
+#[wasm_bindgen_test]
+async fn test_concurrent_write_permission_denied() {
+    let path = "/test_concurrent_write_permission_denied/test.txt";
+    let base_dir = "/test_concurrent_write_permission_denied";
+    let _ = remove_dir_all(base_dir).await;
+    create_dir_all(base_dir).await.unwrap();
+
+    // Hold a write handle open
+    let _write_file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(path)
+        .await
+        .unwrap();
+
+    // Try to write while a handle is still open - should fail with PermissionDenied
+    let err = write(path, b"should fail").await.unwrap_err();
+    assert_eq!(err.kind(), io::ErrorKind::PermissionDenied);
+
+    // Drop the first handle explicitly
+    drop(_write_file);
+
+    // Now write should succeed
+    write(path, b"should succeed").await.unwrap();
+    assert_eq!(read(path).await.unwrap(), b"should succeed");
+
+    let _ = remove_dir_all(base_dir).await;
+}

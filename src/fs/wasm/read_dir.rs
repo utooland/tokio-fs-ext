@@ -99,6 +99,16 @@ pub struct DirEntry {
 }
 
 impl DirEntry {
+    /// Create a new DirEntry manually
+    /// This is useful for creating virtual directory entries
+    pub fn new(path: PathBuf, name: OsString, file_type: FileType) -> Self {
+        Self {
+            file_type,
+            name,
+            path,
+        }
+    }
+
     pub fn path(&self) -> PathBuf {
         self.path.clone()
     }

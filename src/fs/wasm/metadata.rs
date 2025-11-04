@@ -15,6 +15,15 @@ pub enum FileType {
 }
 
 impl FileType {
+    /// Create FileType from string representation ("file" or "directory")
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "directory" => Self::Directory,
+            "file" => Self::File,
+            _ => Self::File, // default to file
+        }
+    }
+
     pub fn is_dir(&self) -> bool {
         *self == Self::Directory
     }
