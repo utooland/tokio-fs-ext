@@ -39,24 +39,22 @@ pub(crate) async fn open_file(
         None => root().await?,
     };
 
-    let sync_access_handle = match create {
-        CreateFileMode::Create => get_file_handle(&name, &dir_entry, mode, true, truncate).await?,
+    match create {
+        CreateFileMode::Create => get_file_handle(&name, &dir_entry, mode, true, truncate).await,
         CreateFileMode::CreateNew => {
             match get_file_handle(&name, &dir_entry, mode, false, truncate).await {
-                Ok(_) => {
-                    return Err(io::Error::from(io::ErrorKind::AlreadyExists));
+                Ok(file) => {
+                    // File exists, need to close it before returning error
+                    drop(file);
+                    Err(io::Error::from(io::ErrorKind::AlreadyExists))
                 }
-                Err(_) => get_file_handle(&name, &dir_entry, mode, true, truncate).await?,
+                Err(_) => get_file_handle(&name, &dir_entry, mode, true, truncate).await,
             }
         }
         CreateFileMode::NotCreate => {
-            get_file_handle(&name, &dir_entry, mode, false, truncate).await?
+            get_file_handle(&name, &dir_entry, mode, false, truncate).await
         }
-    };
-    Ok(File {
-        sync_access_handle,
-        pos: None,
-    })
+    }
 }
 
 async fn get_file_handle(
@@ -65,7 +63,7 @@ async fn get_file_handle(
     mode: SyncAccessMode,
     create: bool,
     truncate: bool,
-) -> Result<FileSystemSyncAccessHandle, io::Error> {
+) -> Result<File, io::Error> {
     let option = FileSystemGetFileOptions::new();
     option.set_create(create);
     let file_handle = JsFuture::from(dir_entry.get_file_handle_with_options(name, &option))
@@ -90,14 +88,16 @@ async fn get_file_handle(
         .map_err(|err| OpfsError::from(err).into_io_err())?
         .unchecked_into::<FileSystemSyncAccessHandle>();
 
+    // Wrap in File immediately so Drop will handle cleanup on error
+    let file = File {
+        sync_access_handle,
+        pos: None,
+    };
+
     if truncate {
-        sync_access_handle
+        file.sync_access_handle
             .truncate_with_u32(0)
-            .map_err(|err| {
-                // Ensure we close the handle to release the exclusive lock before returning error
-                sync_access_handle.close();
-                OpfsError::from(err).into_io_err()
-            })?;
+            .map_err(|err| OpfsError::from(err).into_io_err())?;
     }
-    Ok(sync_access_handle)
+    Ok(file)
 }
