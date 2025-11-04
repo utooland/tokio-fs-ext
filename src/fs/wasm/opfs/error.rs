@@ -23,14 +23,24 @@ impl From<JsValue> for OpfsError {
 impl From<OpfsError> for io::Error {
     fn from(opfs_err: OpfsError) -> Self {
         match opfs_err.js_err.dyn_ref::<DomException>() {
-            Some(e) => match e.name().as_str() {
-                "NotFoundError" => io::Error::from(io::ErrorKind::NotFound),
-                "NotAllowedError" | "NoModificationAllowedError" => {
-                    io::Error::from(io::ErrorKind::PermissionDenied)
+            Some(e) => {
+                let error_name = e.name();
+                let error_message = e.message();
+                match error_name.as_str() {
+                    "NotFoundError" => io::Error::new(
+                        io::ErrorKind::NotFound,
+                        format!("NotFoundError: {}", error_message),
+                    ),
+                    "NotAllowedError" | "NoModificationAllowedError" => io::Error::new(
+                        io::ErrorKind::PermissionDenied,
+                        format!("{}: {} (this may indicate a file handle is still open or locked)", error_name, error_message),
+                    ),
+                    "TypeMismatchError" => {
+                        io::Error::other(format!("TypeMismatchError: {}", error_message))
+                    }
+                    _ => io::Error::other(format!("{}: {}", error_name, error_message)),
                 }
-                "TypeMismatchError" => io::Error::other("type mismatch"),
-                msg => io::Error::other(msg),
-            },
+            }
             None => io::Error::other(format!("{}", Object::from(opfs_err.js_err).to_string())),
         }
     }
