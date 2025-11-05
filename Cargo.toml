@@ -52,7 +52,7 @@ web-sys = { version = "0.3.78", features = [
   "WorkerNavigator",
   "console",
 ] }
-wasm-bindgen = { version = "0.2.101", default-features = false }
+wasm-bindgen = { version = "0.2.104", default-features = false }
 wasm-bindgen-futures = { version = "0.4.51", features = [
   "futures-core-03-stream",
 ] }
@@ -63,7 +63,7 @@ notify-types = { version = "2.0.0", optional = true }
 tracing = { version = "0.1.41", optional = true }
 
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dev-dependencies]
-wasm-bindgen-test = "0.3.51"
+wasm-bindgen-test = "=0.3.54"
 
 [target.'cfg(not(all(target_family = "wasm", target_os = "unknown")))'.dev-dependencies]
 tokio = { version = "1.47.1", features = ["macros", "test-util"] }

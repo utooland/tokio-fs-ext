@@ -1,7 +1,6 @@
 use std::{
     ffi::OsString,
     fmt::Debug,
-    fs::Metadata,
     io,
     path::{Path, PathBuf},
     str::FromStr,
@@ -15,7 +14,7 @@ use wasm_bindgen_futures::stream::JsStream;
 use web_sys::FileSystemHandle;
 
 use super::{
-    metadata::FileType,
+    metadata::{FileType, Metadata},
     opfs::{OpfsError, open_dir},
 };
 
