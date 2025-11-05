@@ -99,6 +99,17 @@ pub struct DirEntry {
 }
 
 impl DirEntry {
+    /// Create a new `DirEntry`.
+    ///
+    /// This is useful for constructing mock directory entries for testing.
+    pub fn new(path: PathBuf, name: OsString, file_type: FileType) -> Self {
+        Self {
+            file_type,
+            name,
+            path,
+        }
+    }
+
     pub fn path(&self) -> PathBuf {
         self.path.clone()
     }

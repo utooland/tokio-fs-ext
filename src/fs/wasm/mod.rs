@@ -29,7 +29,7 @@ pub use create_dir_all::create_dir_all;
 pub use current_dir::{current_dir, set_current_dir};
 pub use dir_builder::DirBuilder;
 pub use file::File;
-pub use metadata::{Metadata, metadata};
+pub use metadata::{FileType, Metadata, metadata};
 pub use open_options::OpenOptions;
 pub use read::read;
 pub use read_dir::{DirEntry, ReadDir, read_dir};
