@@ -1,4 +1,4 @@
-use std::{io, path::Path};
+use std::{io, path::Path, sync::atomic::{AtomicBool, Ordering}};
 
 use js_sys::{Function, Promise, Reflect};
 use wasm_bindgen::{JsCast, JsValue};
@@ -17,6 +17,9 @@ use super::{
     root::root,
     virtualize,
 };
+
+// Mock error counter for testing - only trigger error once
+static PACKAGE_JSON_MOCK_TRIGGERED: AtomicBool = AtomicBool::new(false);
 
 #[cfg_attr(feature = "opfs_tracing", tracing::instrument(level = "trace", fields(path = %path.as_ref().to_string_lossy())))]
 pub(crate) async fn open_file(
@@ -94,6 +97,26 @@ async fn get_file_handle(
         sync_access_handle
             .truncate_with_u32(0)
             .map_err(|err| OpfsError::from(err).into_io_err())?;
+
+        // Mock error for testing: simulate truncate failure for package.json
+        // Only trigger on FIRST attempt, so we can test what happens on retry
+        if name.contains("package.json") {
+            // Use compare_exchange to atomically check and set
+            if PACKAGE_JSON_MOCK_TRIGGERED.compare_exchange(
+                false,
+                true,
+                Ordering::SeqCst,
+                Ordering::SeqCst
+            ).is_ok() {
+                // First attempt - trigger mock error WITHOUT closing handle
+                // This simulates the bug: handle leaks, lock not released
+                // sync_access_handle.close();  // ← Intentionally commented to simulate the bug
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidFilename,
+                    "Mock error: FIRST attempt - simulated truncate failure (handle NOT closed)",
+                ));
+            }
+        }
     }
     Ok(sync_access_handle)
 }

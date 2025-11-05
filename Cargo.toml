@@ -17,6 +17,7 @@ default = []
 opfs_offload = ["tokio/sync"]
 opfs_watch = ["tokio/sync", "notify-types"]
 opfs_tracing = ["tracing"]
+opfs_mock_errors = []  # Enable mock errors for testing
 
 [dependencies]
 futures = "0.3.31"

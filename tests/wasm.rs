@@ -7,7 +7,9 @@ use futures::{
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
 };
 use tokio_fs_ext::*;
+use wasm_bindgen::JsValue;
 use wasm_bindgen_test::{wasm_bindgen_test_configure, *};
+use web_sys::console;
 
 wasm_bindgen_test_configure!(run_in_dedicated_worker);
 
@@ -524,4 +526,54 @@ async fn test_current_dir() {
     assert_eq!(read_content, content.to_vec());
 
     let _ = remove_dir_all(deep_dir).await;
+}
+
+#[wasm_bindgen_test]
+async fn test_write_handle_cleanup_after_truncate_failure() {
+    let base_dir = "/test_write_handle_cleanup";
+    let package_json = format!("{}/package.json", base_dir);
+    let index_js = format!("{}/index.js", base_dir);
+
+    let _ = remove_dir_all(base_dir).await;
+    create_dir_all(base_dir).await.unwrap();
+
+    // First write to package.json should fail (mocked error)
+    console::log_1(&JsValue::from_str("=== Test 1: First write to package.json (should fail with mock error) ==="));
+    let result1 = write(&package_json, b"{}").await;
+    console::log_1(&JsValue::from_str(&format!("Result 1: {:?}", result1)));
+
+    if result1.is_err() {
+        let err = result1.unwrap_err();
+        console::log_1(&JsValue::from_str(&format!("✓ First write failed as expected. Error: {}", err)));
+    } else {
+        panic!("Expected error but write succeeded!");
+    }
+
+    // The critical test: Retry writing to the SAME file (package.json)
+    // If the handle wasn't closed, this will fail with a DIFFERENT error (handle still locked)
+    // If the handle was properly closed, this will fail with the SAME mock error
+    console::log_1(&JsValue::from_str("=== Test 2: Retry writing to package.json ==="));
+
+    let result2 = write(&package_json, b"{\"version\": \"2\"}").await;
+    console::log_1(&JsValue::from_str(&format!("Result 2: {:?}", result2)));
+
+    if result2.is_err() {
+        let err = result2.unwrap_err();
+        console::log_1(&JsValue::from_str(&format!("Error kind: {:?}, message: {}", err.kind(), err)));
+
+        console::log_1(&JsValue::from_str(&format!("😯 Got different error: {}", err)));
+    } else {
+        panic!("Expected error but second write succeeded!");
+    }
+
+    // Also test that other files work fine
+    console::log_1(&JsValue::from_str("=== Test 3: Write to index.js (different file, should succeed) ==="));
+    let result_js = write(&index_js, b"console.log('test')").await;
+    console::log_1(&JsValue::from_str(&format!("index.js write result: {:?}", result_js)));
+    result_js.unwrap();
+    assert_eq!(read(&index_js).await.unwrap(), b"console.log('test')");
+    console::log_1(&JsValue::from_str("✓ index.js write succeeded!"));
+
+    let _ = remove_dir_all(base_dir).await;
+    console::log_1(&JsValue::from_str("Test completed successfully!"));
 }
