@@ -91,9 +91,18 @@ async fn get_file_handle(
         .unchecked_into::<FileSystemSyncAccessHandle>();
 
     if truncate {
-        sync_access_handle
-            .truncate_with_u32(0)
-            .map_err(|err| OpfsError::from(err).into_io_err())?;
+        sync_access_handle.truncate_with_u32(0).map_or_else(
+            |err| {
+                sync_access_handle.close();
+                Err(OpfsError::from(err).into_io_err())
+            },
+            |_| {
+                sync_access_handle.flush().map_err(|err| {
+                    sync_access_handle.close();
+                    OpfsError::from(err).into_io_err()
+                })
+            },
+        )?;
     }
     Ok(sync_access_handle)
 }
