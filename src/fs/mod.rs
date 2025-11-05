@@ -16,6 +16,8 @@ cfg_if! {
 
         pub use wasm::ReadDirStream;
 
+        pub use wasm::FileType;
+
         #[cfg(feature = "opfs_offload")]
         pub use wasm::offload;
 

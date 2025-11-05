@@ -51,6 +51,15 @@ pub struct Metadata {
 }
 
 impl Metadata {
+    pub fn new(file_type: FileType, file_size: u64) -> Self {
+        Self {
+            file_type,
+            file_size,
+        }
+    }
+}
+
+impl Metadata {
     pub fn is_dir(&self) -> bool {
         self.file_type.is_dir()
     }
