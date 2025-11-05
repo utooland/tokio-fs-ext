@@ -16,5 +16,7 @@ pub async fn write(path: impl AsRef<Path>, content: impl AsRef<[u8]>) -> io::Res
 
     file.write_with_buf(content.as_ref())?;
 
+    file.sync_data().await?;
+
     Ok(())
 }
