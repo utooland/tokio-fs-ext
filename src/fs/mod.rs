@@ -12,7 +12,7 @@ cfg_if! {
             rename, symlink_metadata, try_exists, write,
         };
 
-        pub use wasm::{FileType, Metadata, symlink};
+        pub use wasm::{Metadata, symlink};
 
         pub use wasm::ReadDirStream;
 
