@@ -7,7 +7,7 @@ Tokio-fs-ext is a Rust library that provides a `tokio::fs` compatible API for bo
 
 ## Overview
 
-The standard `tokio::fs` module in the Tokio runtime is a powerful tool for asynchronous file system operations. However, it relies on blocking `syscalls` an I/O operations that are executed on a dedicated thread pool. This design is not suitable for WebAssembly environments where threading and direct file system access are restricted.
+The standard `tokio::fs` module in the Tokio runtime is a powerful tool for asynchronous file system operations. However, it relies on `syscalls` and I/O operations that are executed on a dedicated thread pool. This design is not suitable for WebAssembly environments where threading and direct file system access are restricted.
 
 This library aims to bridge that gap by offering an API that is compatible with `tokio::fs` but works seamlessly in WebAssembly. It provides a consistent interface for file system operations, regardless of the target platform.
 
