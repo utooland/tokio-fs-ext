@@ -4,6 +4,8 @@ use std::{
     sync::{LazyLock, RwLock},
 };
 
+use super::opfs::virtualize;
+
 static CURRENT_DIR: LazyLock<RwLock<PathBuf>> = LazyLock::new(|| RwLock::new(PathBuf::from("/")));
 
 pub fn current_dir() -> io::Result<PathBuf> {
@@ -19,7 +21,7 @@ pub fn set_current_dir<P: AsRef<Path>>(path: P) -> io::Result<()> {
         .write()
         .map_err(|_| io::Error::from(io::ErrorKind::Deadlock))?;
 
-    *cwd = path.as_ref().into();
+    *cwd = virtualize(path)?;
 
     Ok(())
 }

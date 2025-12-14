@@ -8,6 +8,8 @@ use web_sys::{
     FileSystemSyncAccessHandle,
 };
 
+use crate::current_dir;
+
 use super::{
     super::File,
     OpenDirType,
@@ -35,7 +37,17 @@ pub(crate) async fn open_file(
     }?;
 
     let dir_entry = match parent {
-        Some(parent_path) => open_dir(parent_path, OpenDirType::NotCreate).await?,
+        Some(parent_path) => {
+            open_dir(
+                parent_path,
+                if parent_path == current_dir()? {
+                    OpenDirType::CreateRecursive
+                } else {
+                    OpenDirType::NotCreate
+                },
+            )
+            .await?
+        }
         None => root().await?,
     };
 
