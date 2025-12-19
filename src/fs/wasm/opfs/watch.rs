@@ -1,6 +1,6 @@
 use std::{
     io,
-    path::{MAIN_SEPARATOR_STR, Path},
+    path::{Path, PathBuf},
 };
 
 use js_sys::{Array, JsString};
@@ -11,6 +11,8 @@ use wasm_bindgen::{
 };
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{FileSystemDirectoryHandle, FileSystemHandle, FileSystemSyncAccessHandle};
+
+use crate::fs::wasm::current_dir;
 
 use super::{super::opfs::OpfsError, CreateFileMode, OpenDirType, SyncAccessMode, open_file};
 
@@ -98,52 +100,52 @@ pub enum FileSystemChangeRecordType {
     Unknown = "unknown",
 }
 
-impl From<&FileSystemChangeRecord> for event::Event {
-    fn from(record: &FileSystemChangeRecord) -> Self {
-        let kind = record.changed_handle().kind();
+impl TryFrom<&FileSystemChangeRecord> for event::Event {
+    type Error = io::Error;
+    fn try_from(record: &FileSystemChangeRecord) -> Result<Self, Self::Error> {
+        let kind = record
+            .changed_handle()
+            .kind();
 
-        event::Event {
-            kind: match record.r#type() {
-                FileSystemChangeRecordType::Appeared => event::EventKind::Create(match kind {
-                    web_sys::FileSystemHandleKind::File => event::CreateKind::File,
-                    web_sys::FileSystemHandleKind::Directory => event::CreateKind::Folder,
-                    _ => event::CreateKind::Any,
-                }),
-                FileSystemChangeRecordType::Disappeared => event::EventKind::Remove(match kind {
-                    web_sys::FileSystemHandleKind::File => event::RemoveKind::File,
-                    web_sys::FileSystemHandleKind::Directory => event::RemoveKind::Folder,
-                    _ => event::RemoveKind::Any,
-                }),
-                FileSystemChangeRecordType::Modified => match kind {
-                    web_sys::FileSystemHandleKind::File => {
-                        event::EventKind::Modify(event::ModifyKind::Data(event::DataChange::Any))
-                    }
-                    web_sys::FileSystemHandleKind::Directory => event::EventKind::Modify(
-                        event::ModifyKind::Metadata(event::MetadataKind::Any),
-                    ),
-                    _ => event::EventKind::Modify(event::ModifyKind::Any),
-                },
-                FileSystemChangeRecordType::Moved => {
-                    event::EventKind::Modify(event::ModifyKind::Name(event::RenameMode::Any))
+        let kind = match record.r#type() {
+            FileSystemChangeRecordType::Appeared => event::EventKind::Create(match kind {
+                web_sys::FileSystemHandleKind::File => event::CreateKind::File,
+                web_sys::FileSystemHandleKind::Directory => event::CreateKind::Folder,
+                _ => event::CreateKind::Any,
+            }),
+            FileSystemChangeRecordType::Disappeared => event::EventKind::Remove(match kind {
+                web_sys::FileSystemHandleKind::File => event::RemoveKind::File,
+                web_sys::FileSystemHandleKind::Directory => event::RemoveKind::Folder,
+                _ => event::RemoveKind::Any,
+            }),
+            FileSystemChangeRecordType::Modified => match kind {
+                web_sys::FileSystemHandleKind::File => {
+                    event::EventKind::Modify(event::ModifyKind::Data(event::DataChange::Any))
                 }
-                FileSystemChangeRecordType::Unknown => event::EventKind::Other,
-                FileSystemChangeRecordType::Errored => event::EventKind::Other,
-                FileSystemChangeRecordType::__Invalid => event::EventKind::Other,
+                web_sys::FileSystemHandleKind::Directory => {
+                    event::EventKind::Modify(event::ModifyKind::Metadata(event::MetadataKind::Any))
+                }
+                _ => event::EventKind::Modify(event::ModifyKind::Any),
             },
-            paths: vec![
-                format!(
-                    "./{}",
-                    record
-                        .relative_path_components()
-                        .iter()
-                        .map(|p| String::from(p.unchecked_ref::<JsString>()))
-                        .collect::<Vec<_>>()
-                        .join(MAIN_SEPARATOR_STR)
-                )
-                .into(),
-            ],
+            FileSystemChangeRecordType::Moved => {
+                event::EventKind::Modify(event::ModifyKind::Name(event::RenameMode::Any))
+            }
+            FileSystemChangeRecordType::Unknown => event::EventKind::Other,
+            FileSystemChangeRecordType::Errored => event::EventKind::Other,
+            FileSystemChangeRecordType::__Invalid => event::EventKind::Other,
+        };
+        let path = current_dir()?.join(
+            record
+                .relative_path_components()
+                .iter()
+                .map(|p| String::from(p.unchecked_ref::<JsString>()))
+                .collect::<PathBuf>(),
+        );
+        Ok(event::Event {
+            kind,
+            paths: vec![path],
             ..Default::default()
-        }
+        })
     }
 }
 
@@ -155,8 +157,14 @@ pub async fn watch_dir(
     let observer = FileSystemObserver::new(
         Closure::<dyn Fn(Array)>::new(move |records: Array| {
             records.iter().for_each(|record| {
-                let event = event::Event::from(record.unchecked_ref::<FileSystemChangeRecord>());
-                cb(event)
+                let record: FileSystemChangeRecord = record.unchecked_into();
+                match event::Event::try_from(&record) {
+                    Ok(evt) => cb(evt),
+                    Err(err) => {
+                        #[cfg(feature = "opfs_tracing")]
+                        tracing::error!("failed to parse event from record: {err:?}");
+                    }
+                }
             });
         })
         .into_js_value()
@@ -180,8 +188,14 @@ pub async fn watch_file(
     let observer = FileSystemObserver::new(
         Closure::<dyn Fn(Array)>::new(move |records: Array| {
             records.iter().for_each(|record| {
-                let event = event::Event::from(record.unchecked_ref::<FileSystemChangeRecord>());
-                cb(event)
+                let record: FileSystemChangeRecord = record.unchecked_into();
+                match event::Event::try_from(&record) {
+                    Ok(evt) => cb(evt),
+                    Err(err) => {
+                        #[cfg(feature = "opfs_tracing")]
+                        tracing::error!("failed to parse event from record: {err:?}");
+                    }
+                }
             });
         })
         .into_js_value()
