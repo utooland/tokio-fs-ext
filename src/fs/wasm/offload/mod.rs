@@ -16,7 +16,7 @@ mod task;
 pub use self::{client::Client, server::Server, task::FsTask};
 
 pub fn split() -> (Server, Client) {
-    let (sender, receiver) = mpsc::channel(32);
+    let (sender, receiver) = mpsc::unbounded_channel();
     (Server { receiver }, Client { sender })
 }
 

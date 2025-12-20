@@ -103,9 +103,7 @@ pub enum FileSystemChangeRecordType {
 impl TryFrom<&FileSystemChangeRecord> for event::Event {
     type Error = io::Error;
     fn try_from(record: &FileSystemChangeRecord) -> Result<Self, Self::Error> {
-        let kind = record
-            .changed_handle()
-            .kind();
+        let kind = record.changed_handle().kind();
 
         let kind = match record.r#type() {
             FileSystemChangeRecordType::Appeared => event::EventKind::Create(match kind {

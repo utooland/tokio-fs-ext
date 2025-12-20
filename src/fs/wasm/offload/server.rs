@@ -3,7 +3,7 @@ use tokio::sync::mpsc;
 use super::{FsOffload, FsOffloadDefault, FsTask};
 
 pub struct Server {
-    pub(super) receiver: mpsc::Receiver<FsTask>,
+    pub(super) receiver: mpsc::UnboundedReceiver<FsTask>,
 }
 
 impl Server {

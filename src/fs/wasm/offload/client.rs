@@ -8,7 +8,7 @@ use super::{FsTask, Metadata, ReadDir};
 
 #[derive(Clone)]
 pub struct Client {
-    pub(super) sender: mpsc::Sender<FsTask>,
+    pub(super) sender: mpsc::UnboundedSender<FsTask>,
 }
 
 impl Client {
@@ -97,7 +97,6 @@ impl Client {
 
         self.sender
             .send(task)
-            .await
             .map_err(|_| io::Error::from(io::ErrorKind::ConnectionAborted))?;
 
         receiver
