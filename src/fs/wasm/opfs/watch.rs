@@ -10,7 +10,9 @@ use wasm_bindgen::{
     prelude::{Closure, wasm_bindgen},
 };
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{FileSystemDirectoryHandle, FileSystemHandle, FileSystemSyncAccessHandle};
+use web_sys::{
+    FileSystemDirectoryHandle, FileSystemHandle, FileSystemHandleKind, FileSystemSyncAccessHandle,
+};
 
 use crate::fs::wasm::current_dir;
 
@@ -85,7 +87,7 @@ extern "C" {
     pub fn relative_path_components(this: &FileSystemChangeRecord) -> Array;
 
     #[wasm_bindgen(method, getter, structural, js_class = "FileSystemChangeRecord", js_name = changedHandle)]
-    pub fn changed_handle(this: &FileSystemChangeRecord) -> FileSystemHandle;
+    pub fn changed_handle(this: &FileSystemChangeRecord) -> Option<FileSystemHandle>;
 
 }
 
@@ -103,24 +105,24 @@ pub enum FileSystemChangeRecordType {
 impl TryFrom<&FileSystemChangeRecord> for event::Event {
     type Error = io::Error;
     fn try_from(record: &FileSystemChangeRecord) -> Result<Self, Self::Error> {
-        let kind = record.changed_handle().kind();
+        let kind = record.changed_handle().map(|h| h.kind());
 
         let kind = match record.r#type() {
             FileSystemChangeRecordType::Appeared => event::EventKind::Create(match kind {
-                web_sys::FileSystemHandleKind::File => event::CreateKind::File,
-                web_sys::FileSystemHandleKind::Directory => event::CreateKind::Folder,
+                Some(FileSystemHandleKind::File) => event::CreateKind::File,
+                Some(FileSystemHandleKind::Directory) => event::CreateKind::Folder,
                 _ => event::CreateKind::Any,
             }),
             FileSystemChangeRecordType::Disappeared => event::EventKind::Remove(match kind {
-                web_sys::FileSystemHandleKind::File => event::RemoveKind::File,
-                web_sys::FileSystemHandleKind::Directory => event::RemoveKind::Folder,
+                Some(FileSystemHandleKind::File) => event::RemoveKind::File,
+                Some(FileSystemHandleKind::Directory) => event::RemoveKind::Folder,
                 _ => event::RemoveKind::Any,
             }),
             FileSystemChangeRecordType::Modified => match kind {
-                web_sys::FileSystemHandleKind::File => {
+                Some(FileSystemHandleKind::File) => {
                     event::EventKind::Modify(event::ModifyKind::Data(event::DataChange::Any))
                 }
-                web_sys::FileSystemHandleKind::Directory => {
+                Some(FileSystemHandleKind::Directory) => {
                     event::EventKind::Modify(event::ModifyKind::Metadata(event::MetadataKind::Any))
                 }
                 _ => event::EventKind::Modify(event::ModifyKind::Any),
@@ -158,9 +160,9 @@ pub async fn watch_dir(
                 let record: FileSystemChangeRecord = record.unchecked_into();
                 match event::Event::try_from(&record) {
                     Ok(evt) => cb(evt),
-                    Err(err) => {
+                    Err(_err) => {
                         #[cfg(feature = "opfs_tracing")]
-                        tracing::error!("failed to parse event from record: {err:?}");
+                        tracing::error!("failed to parse event from record: {_err:?}");
                     }
                 }
             });
@@ -189,9 +191,9 @@ pub async fn watch_file(
                 let record: FileSystemChangeRecord = record.unchecked_into();
                 match event::Event::try_from(&record) {
                     Ok(evt) => cb(evt),
-                    Err(err) => {
+                    Err(_err) => {
                         #[cfg(feature = "opfs_tracing")]
-                        tracing::error!("failed to parse event from record: {err:?}");
+                        tracing::error!("failed to parse event from record: {_err:?}");
                     }
                 }
             });
