@@ -1,5 +1,7 @@
 use std::{io, path::Path};
 
+use futures::io::AsyncReadExt;
+
 use super::OpenOptions;
 
 pub async fn read(path: impl AsRef<Path>) -> io::Result<Vec<u8>> {
@@ -7,7 +9,7 @@ pub async fn read(path: impl AsRef<Path>) -> io::Result<Vec<u8>> {
 
     let mut buf = vec![];
 
-    file.read_to_buf(&mut buf)?;
+    file.read_to_end(&mut buf).await?;
 
     Ok(buf)
 }
