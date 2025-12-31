@@ -14,9 +14,10 @@ use web_sys::{
     FileSystemDirectoryHandle, FileSystemHandle, FileSystemHandleKind, FileSystemSyncAccessHandle,
 };
 
-use crate::fs::wasm::current_dir;
-
-use super::{super::opfs::OpfsError, CreateFileMode, OpenDirType, SyncAccessMode, open_file};
+use super::{
+    super::opfs::{OpfsError, virtualize},
+    CreateFileMode, OpenDirType, SyncAccessMode, open_file,
+};
 
 #[wasm_bindgen]
 extern "C" {
@@ -89,6 +90,9 @@ extern "C" {
     #[wasm_bindgen(method, getter, structural, js_class = "FileSystemChangeRecord", js_name = changedHandle)]
     pub fn changed_handle(this: &FileSystemChangeRecord) -> Option<FileSystemHandle>;
 
+    #[wasm_bindgen(method, getter, structural, js_class = "FileSystemChangeRecord", js_name = root)]
+    pub fn root(this: &FileSystemChangeRecord) -> FileSystemHandle;
+
 }
 
 // https://developer.mozilla.org/en-US/docs/Web/API/FileSystemChangeRecord#type
@@ -134,7 +138,7 @@ impl TryFrom<&FileSystemChangeRecord> for event::Event {
             FileSystemChangeRecordType::Errored => event::EventKind::Other,
             FileSystemChangeRecordType::__Invalid => event::EventKind::Other,
         };
-        let path = current_dir()?.join(
+        let path = virtualize(format!("/{}", record.root().name()))?.join(
             record
                 .relative_path_components()
                 .iter()
