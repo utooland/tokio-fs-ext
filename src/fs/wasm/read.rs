@@ -1,15 +1,30 @@
 use std::{io, path::Path};
 
-use super::OpenOptions;
+use js_sys::{Function, Promise, Reflect, Uint8Array};
+use wasm_bindgen::JsCast;
+use wasm_bindgen_futures::JsFuture;
+
+use super::opfs::{get_fs_handle, CreateFileMode, OpfsError};
 
 pub async fn read(path: impl AsRef<Path>) -> io::Result<Vec<u8>> {
-    let mut file = OpenOptions::new().read(true).open(path).await?;
+    let handle = get_fs_handle(path, CreateFileMode::NotCreate).await?;
 
-    let file_size = file.size()?;
+    let file_val = JsFuture::from(handle.get_file())
+        .await
+        .map_err(|err| OpfsError::from(err).into_io_err())?;
 
-    let mut buf = vec![0; file_size as usize];
+    let array_buffer_method = Reflect::get(&file_val, &"arrayBuffer".into())
+        .map_err(|err| OpfsError::from(err).into_io_err())?
+        .unchecked_into::<Function>();
 
-    file.read_to_buf(&mut buf)?;
+    let promise = array_buffer_method.call0(&file_val)
+        .map_err(|err| OpfsError::from(err).into_io_err())?
+        .unchecked_into::<Promise>();
 
-    Ok(buf)
+    let array_buffer = JsFuture::from(promise)
+        .await
+        .map_err(|err| OpfsError::from(err).into_io_err())?;
+
+    let uint8_array = Uint8Array::new(&array_buffer);
+    Ok(uint8_array.to_vec())
 }

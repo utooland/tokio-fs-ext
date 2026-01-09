@@ -1,3 +1,4 @@
+use futures::stream::{FuturesUnordered, StreamExt};
 use tokio::sync::mpsc;
 
 use super::{FsOffload, FsOffloadDefault, FsTask};
@@ -8,8 +9,26 @@ pub struct Server {
 
 impl Server {
     pub async fn serve(&mut self, offload: impl FsOffload) {
-        while let Some(task) = self.receiver.recv().await {
-            task.execute(&offload).await;
+        let mut tasks = FuturesUnordered::new();
+        let offload = &offload;
+
+        loop {
+            tokio::select! {
+                res = self.receiver.recv() => {
+                    match res {
+                        Some(task) => {
+                            tasks.push(async move {
+                                task.execute(offload).await;
+                            });
+                        }
+                        None => {
+                            while (tasks.next().await).is_some() {}
+                            break;
+                        }
+                    }
+                }
+                Some(_) = tasks.next() => {}
+            }
         }
     }
 

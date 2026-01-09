@@ -14,7 +14,7 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []
-opfs_offload = ["tokio/sync"]
+opfs_offload = ["tokio/sync", "tokio/macros"]
 opfs_watch = ["tokio/sync", "notify-types"]
 opfs_tracing = ["tracing"]
 

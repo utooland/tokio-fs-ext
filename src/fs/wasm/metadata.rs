@@ -2,7 +2,7 @@ use std::{io, path::Path};
 
 use web_sys::FileSystemHandleKind;
 
-use super::opfs::{OpfsError, open_dir, open_file};
+use super::opfs::{OpfsError, open_dir};
 
 /// Symlink is not supported.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -79,22 +79,22 @@ impl Metadata {
 }
 
 pub async fn metadata(path: impl AsRef<Path>) -> io::Result<Metadata> {
-    match open_file(
-        &path,
-        super::opfs::CreateFileMode::NotCreate,
-        super::opfs::SyncAccessMode::Readonly,
-        false,
-    )
-    .await
-    {
-        Ok(file) => {
-            let len = file
-                .sync_access_handle
-                .get_size()
-                .map_err(|err| OpfsError::from(err).into_io_err())? as u64;
+    let path = path.as_ref();
+
+    match super::opfs::get_fs_handle(path, super::opfs::CreateFileMode::NotCreate).await {
+        Ok(handle) => {
+            let file_val = wasm_bindgen_futures::JsFuture::from(handle.get_file())
+                .await
+                .map_err(|err| OpfsError::from(err).into_io_err())?;
+
+            let size = js_sys::Reflect::get(&file_val, &"size".into())
+                .map_err(|err| OpfsError::from(err).into_io_err())?
+                .as_f64()
+                .unwrap_or(0.0) as u64;
+
             Ok(Metadata {
                 file_type: FileType::File,
-                file_size: len,
+                file_size: size,
             })
         }
         Err(_) => Ok(open_dir(path, super::opfs::OpenDirType::NotCreate)
