@@ -210,9 +210,9 @@ async fn test_file_read_to_string() {
 
 #[tokio::test]
 async fn test_file_read_to_end_small() {
-    let path = get_test_path("/test_file_read_to_end/test_file_read_to_end_small.txt");
+    let path = get_test_path("/test_file_read_to_end_small/file.txt");
     let data = "this is for read_to_end ";
-    let base_dir = get_test_path("/test_file_read_to_end");
+    let base_dir = get_test_path("/test_file_read_to_end_small");
     let _ = remove_dir_all(&base_dir).await;
     create_dir_all(&base_dir).await.unwrap();
 
@@ -228,9 +228,9 @@ async fn test_file_read_to_end_small() {
 
 #[tokio::test]
 async fn test_file_read_to_end_big() {
-    let path = get_test_path("/test_file_read_to_end/test_file_read_to_end_big.txt");
+    let path = get_test_path("/test_file_read_to_end_big/file.txt");
     let data = "this is for read_to_end ".repeat(10);
-    let base_dir = get_test_path("/test_file_read_to_end");
+    let base_dir = get_test_path("/test_file_read_to_end_big");
     let _ = remove_dir_all(&base_dir).await;
     create_dir_all(&base_dir).await.unwrap();
 
