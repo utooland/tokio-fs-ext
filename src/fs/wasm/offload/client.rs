@@ -9,8 +9,7 @@ use super::{FsTask, Metadata, ReadDir};
 #[cfg(feature = "opfs_watch")]
 use tokio::sync::mpsc as watch_mpsc;
 
-/// Handle to stop watching in offload mode.
-/// When dropped or `stop()` is called, the watch is stopped on the server side.
+/// Handle to stop watching in offload mode. Call `stop()` to cancel the watch.
 #[cfg(feature = "opfs_watch")]
 pub struct OffloadWatchHandle {
     stop_sender: Option<watch_mpsc::Sender<()>>,
@@ -29,16 +28,6 @@ impl OffloadWatchHandle {
     pub async fn stop(mut self) {
         if let Some(sender) = self.stop_sender.take() {
             let _ = sender.send(()).await;
-        }
-    }
-}
-
-#[cfg(feature = "opfs_watch")]
-impl Drop for OffloadWatchHandle {
-    fn drop(&mut self) {
-        if let Some(sender) = self.stop_sender.take() {
-            // Best effort - if channel is full or closed, watch will stop anyway
-            let _ = sender.try_send(());
         }
     }
 }

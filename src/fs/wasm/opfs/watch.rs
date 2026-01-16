@@ -1,7 +1,6 @@
 use std::{
     io,
     path::{Path, PathBuf},
-    rc::Rc,
 };
 
 use js_sys::{Array, JsString};
@@ -80,16 +79,12 @@ impl Default for FileSystemDirObserverOptions {
 /// Handle to stop watching. Call `stop()` to cancel the watch.
 pub struct WatchHandle {
     observer: FileSystemObserver,
-    // Keep closure alive to prevent GC
-    #[allow(dead_code)]
-    closure: Rc<Closure<dyn Fn(Array)>>,
 }
 
 impl WatchHandle {
     /// Stop watching and release resources
     pub fn stop(self) {
         self.observer.disconnect();
-        // closure will be dropped here
     }
 }
 
@@ -163,6 +158,10 @@ impl TryFrom<&FileSystemChangeRecord> for event::Event {
                 .map(|p| String::from(p.unchecked_ref::<JsString>()))
                 .collect::<PathBuf>(),
         );
+
+        #[cfg(feature = "opfs_tracing")]
+        tracing::debug!(path = %path.display(), kind = ?kind, "file system change detected");
+
         Ok(event::Event {
             kind,
             paths: vec![path],
@@ -195,7 +194,12 @@ pub async fn watch_dir(
     recursive: bool,
     cb: impl Fn(event::Event) + 'static,
 ) -> io::Result<WatchHandle> {
-    let closure = Rc::new(Closure::<dyn Fn(Array)>::new(move |records: Array| {
+    let path = path.as_ref();
+
+    #[cfg(feature = "opfs_tracing")]
+    tracing::info!(path = %path.display(), recursive, "starting directory watch");
+
+    let closure = Closure::<dyn Fn(Array)>::new(move |records: Array| {
         records.iter().for_each(|record| {
             let record: FileSystemChangeRecord = record.unchecked_into();
             match event::Event::try_from(&record) {
@@ -206,18 +210,18 @@ pub async fn watch_dir(
                 }
             }
         });
-    }));
+    });
 
-    let observer = FileSystemObserver::new(closure.as_ref().as_ref().unchecked_ref());
+    let observer = FileSystemObserver::new(closure.into_js_value().unchecked_ref());
 
-    let dir_handle = super::open_dir(path, OpenDirType::NotCreate).await?;
+    let dir_handle = super::open_dir(&path, OpenDirType::NotCreate).await?;
     let options = FileSystemDirObserverOptions::new();
     options.set_recursive(recursive);
     JsFuture::from(observer.observe_dir_with_options(&dir_handle, &options))
         .await
         .map_err(|e| OpfsError::from(e).into_io_err())?;
 
-    Ok(WatchHandle { observer, closure })
+    Ok(WatchHandle { observer })
 }
 
 /// Watch a file for changes.
@@ -232,7 +236,12 @@ pub async fn watch_file(
     path: impl AsRef<Path>,
     cb: impl Fn(event::Event) + 'static,
 ) -> io::Result<WatchHandle> {
-    let closure = Rc::new(Closure::<dyn Fn(Array)>::new(move |records: Array| {
+    let path = path.as_ref();
+
+    #[cfg(feature = "opfs_tracing")]
+    tracing::info!(path = %path.display(), "starting file watch");
+
+    let closure = Closure::<dyn Fn(Array)>::new(move |records: Array| {
         records.iter().for_each(|record| {
             let record: FileSystemChangeRecord = record.unchecked_into();
             match event::Event::try_from(&record) {
@@ -243,12 +252,12 @@ pub async fn watch_file(
                 }
             }
         });
-    }));
+    });
 
-    let observer = FileSystemObserver::new(closure.as_ref().as_ref().unchecked_ref());
+    let observer = FileSystemObserver::new(closure.into_js_value().unchecked_ref());
 
     let file = open_file(
-        path,
+        &path,
         CreateFileMode::NotCreate,
         SyncAccessMode::Readonly,
         false,
@@ -263,5 +272,5 @@ pub async fn watch_file(
     // This is necessary for the observer to work, but locks the file
     std::mem::forget(file);
 
-    Ok(WatchHandle { observer, closure })
+    Ok(WatchHandle { observer })
 }
