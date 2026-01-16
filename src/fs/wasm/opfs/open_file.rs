@@ -14,6 +14,7 @@ use super::{
     super::File,
     OpenDirType,
     error::OpfsError,
+    file_lock::lock_path,
     open_dir,
     options::{CreateFileMode, CreateSyncAccessHandleOptions, SyncAccessMode},
     root::root,
@@ -27,9 +28,19 @@ pub(crate) async fn open_file(
     mode: SyncAccessMode,
     truncate: bool,
 ) -> io::Result<File> {
+    // Acquire cooperative lock first to prevent concurrent access attempts
+    let virt_path = virtualize::virtualize(path.as_ref())?;
+    let lock_guard = lock_path(&virt_path).await;
+
     let handle = get_fs_handle(path, create).await?;
 
-    let sync_access_handle = create_sync_access_handle(&handle, mode).await?;
+    let sync_access_handle = match create_sync_access_handle(&handle, mode).await {
+        Ok(h) => h,
+        Err(e) => {
+            // Lock guard will be dropped here, releasing the lock
+            return Err(e);
+        }
+    };
 
     if truncate {
         sync_access_handle.truncate_with_u32(0).map_or_else(
@@ -48,6 +59,7 @@ pub(crate) async fn open_file(
     Ok(File {
         sync_access_handle,
         pos: None,
+        lock_guard,
     })
 }
 

@@ -25,10 +25,19 @@ impl From<OpfsError> for io::Error {
         match opfs_err.js_err.dyn_ref::<DomException>() {
             Some(e) => match e.name().as_str() {
                 "NotFoundError" => io::Error::from(io::ErrorKind::NotFound),
-                "NotAllowedError" | "NoModificationAllowedError" => {
-                    io::Error::from(io::ErrorKind::PermissionDenied)
-                }
+                "NotAllowedError" => io::Error::from(io::ErrorKind::PermissionDenied),
+                // NoModificationAllowedError: file is locked by another SyncAccessHandle
+                // Use WouldBlock to indicate the resource is temporarily unavailable
+                "NoModificationAllowedError" => io::Error::new(
+                    io::ErrorKind::WouldBlock,
+                    "file is locked by another handle",
+                ),
                 "TypeMismatchError" => io::Error::other("type mismatch"),
+                // QuotaExceededError: storage quota exceeded
+                "QuotaExceededError" => io::Error::new(
+                    io::ErrorKind::StorageFull,
+                    "storage quota exceeded",
+                ),
                 msg => io::Error::other(msg),
             },
             None => io::Error::other(format!("{}", Object::from(opfs_err.js_err).to_string())),

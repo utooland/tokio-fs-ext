@@ -362,6 +362,7 @@ async fn test_open_options_truncate() {
             .await
             .unwrap();
         // https://developer.mozilla.org/en-US/docs/Web/API/FileSystemFileHandle/createSyncAccessHandle#readwrite
+        // When a file is already opened, another open attempt will block (WouldBlock)
         assert_eq!(
             OpenOptions::new()
                 .read(true)
@@ -369,7 +370,7 @@ async fn test_open_options_truncate() {
                 .await
                 .unwrap_err()
                 .kind(),
-            io::ErrorKind::PermissionDenied
+            io::ErrorKind::WouldBlock
         );
         // Async read might succeed depending on implementation, but sync open MUST fail.
     };

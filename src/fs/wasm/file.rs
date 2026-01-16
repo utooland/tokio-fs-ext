@@ -11,13 +11,19 @@ use web_sys::{FileSystemReadWriteOptions, FileSystemSyncAccessHandle};
 use super::{
     OpenOptions,
     metadata::{FileType, Metadata},
-    opfs::{OpfsError, SyncAccessMode, open_file},
+    opfs::{OpfsError, PathLockGuard, SyncAccessMode, open_file},
 };
 
+/// A file handle with exclusive access to the underlying OPFS file.
+/// 
+/// The file lock is automatically released when the `File` is dropped.
 #[derive(Debug)]
 pub struct File {
     pub(super) sync_access_handle: FileSystemSyncAccessHandle,
     pub(super) pos: Option<u64>,
+    /// RAII guard that ensures exclusive access to this file path
+    #[allow(dead_code)]
+    pub(super) lock_guard: PathLockGuard,
 }
 
 impl File {
@@ -81,7 +87,7 @@ impl File {
     /// Truncates or extends the underlying file, updating the size of this file to become `size`.
     ///
     /// If `size` is less than the current file's size, then the file will be shrunk. If it is greater
-    /// than the currrent file's size, then the file will be extended to `size` and have all intermediate
+    /// than the current file's size, then the file will be extended to `size` and have all intermediate
     /// data filled with 0s.
     ///
     /// The file's cursor is not changed. In particular, if the cursor was at the end of the file and
