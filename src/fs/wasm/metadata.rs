@@ -2,7 +2,7 @@ use std::{io, path::Path};
 
 use web_sys::FileSystemHandleKind;
 
-use super::opfs::{OpfsError, open_dir};
+use super::opfs::{opfs_err, open_dir};
 
 /// Symlink is not supported.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -85,10 +85,10 @@ pub async fn metadata(path: impl AsRef<Path>) -> io::Result<Metadata> {
         Ok(handle) => {
             let file_val = wasm_bindgen_futures::JsFuture::from(handle.get_file())
                 .await
-                .map_err(|err| OpfsError::from(err).into_io_err())?;
+                .map_err(opfs_err)?;
 
             let size = js_sys::Reflect::get(&file_val, &"size".into())
-                .map_err(|err| OpfsError::from(err).into_io_err())?
+                .map_err(opfs_err)?
                 .as_f64()
                 .unwrap_or(0.0) as u64;
 

@@ -4,7 +4,7 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::FileSystemRemoveOptions;
 
 use super::{
-    OpenDirType, OpfsError, dir_handle_cache::remove_cached_dir_handle, open_dir, root::root,
+    OpenDirType, opfs_err, dir_handle_cache::remove_cached_dir_handle, open_dir, root::root,
     virtualize,
 };
 
@@ -29,7 +29,7 @@ pub(crate) async fn remove(path: impl AsRef<Path>, recursive: bool) -> io::Resul
 
     JsFuture::from(dir_entry.remove_entry_with_options(&name, &options))
         .await
-        .map_err(|err| OpfsError::from(err).into_io_err())?;
+        .map_err(opfs_err)?;
 
     remove_cached_dir_handle(&virt, recursive);
 

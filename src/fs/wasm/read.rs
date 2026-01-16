@@ -5,18 +5,12 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Blob, File};
 
-use super::opfs::{CreateFileMode, OpfsError, get_fs_handle};
+use super::opfs::{CreateFileMode, get_fs_handle, opfs_err};
 
 /// Files larger than this threshold will be read in chunks (10 MB)
 const LARGE_FILE_THRESHOLD: usize = 10 * 1024 * 1024;
 /// Chunk size for reading large files (2 MB)
 const CHUNK_SIZE: usize = 2 * 1024 * 1024;
-
-/// Helper to convert OpfsError to io::Error
-#[inline]
-fn opfs_err(err: wasm_bindgen::JsValue) -> io::Error {
-    OpfsError::from(err).into_io_err()
-}
 
 pub async fn read(path: impl AsRef<Path>) -> io::Result<Vec<u8>> {
     let handle = get_fs_handle(&path, CreateFileMode::NotCreate).await?;

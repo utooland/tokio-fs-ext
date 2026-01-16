@@ -6,32 +6,6 @@ use tokio::sync::{mpsc, oneshot};
 use super::super::opfs::watch::event;
 use super::{FsTask, Metadata, ReadDir};
 
-#[cfg(feature = "opfs_watch")]
-use tokio::sync::mpsc as watch_mpsc;
-
-/// Handle to stop watching in offload mode. Call `stop()` to cancel the watch.
-#[cfg(feature = "opfs_watch")]
-pub struct OffloadWatchHandle {
-    stop_sender: Option<watch_mpsc::Sender<()>>,
-}
-
-// Ensure OffloadWatchHandle is Send + Sync for multi-threaded WASM
-#[cfg(feature = "opfs_watch")]
-const _: () = {
-    const fn assert_send_sync<T: Send + Sync>() {}
-    assert_send_sync::<OffloadWatchHandle>();
-};
-
-#[cfg(feature = "opfs_watch")]
-impl OffloadWatchHandle {
-    /// Stop watching and release resources on the server side
-    pub async fn stop(mut self) {
-        if let Some(sender) = self.stop_sender.take() {
-            let _ = sender.send(()).await;
-        }
-    }
-}
-
 #[derive(Clone)]
 pub struct Client {
     pub(super) sender: mpsc::UnboundedSender<FsTask>,
@@ -102,19 +76,15 @@ impl Client {
         path: impl AsRef<Path>,
         recursive: bool,
         cb: impl Fn(event::Event) + Send + Sync + 'static,
-    ) -> io::Result<OffloadWatchHandle> {
+    ) -> io::Result<()> {
         let path = path.as_ref().into();
-        let stop_sender = self
-            .dispatch(|sender| FsTask::WatchDir {
-                path,
-                recursive,
-                cb: Box::new(cb),
-                sender,
-            })
-            .await?;
-        Ok(OffloadWatchHandle {
-            stop_sender: Some(stop_sender),
+        self.dispatch(|sender| FsTask::WatchDir {
+            path,
+            recursive,
+            cb: Box::new(cb),
+            sender,
         })
+        .await
     }
 
     async fn dispatch<T, F>(&self, create_task: F) -> io::Result<T>

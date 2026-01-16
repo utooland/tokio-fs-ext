@@ -9,7 +9,7 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{FileSystemDirectoryHandle, FileSystemGetDirectoryOptions};
 
 use super::{
-    OpfsError,
+    opfs_err,
     dir_handle_cache::{get_cached_dir_handle, set_cached_dir_handle},
     options::OpenDirType,
     root::root,
@@ -78,7 +78,7 @@ async fn get_dir_handle(
 
     let dir_handle = JsFuture::from(parent.get_directory_handle_with_options(path, &options))
         .await
-        .map_err(|err| OpfsError::from(err).into_io_err())?
+        .map_err(opfs_err)?
         .unchecked_into::<FileSystemDirectoryHandle>();
     Ok(dir_handle)
 }

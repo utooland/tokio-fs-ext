@@ -4,14 +4,14 @@ use js_sys::Object;
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::DomException;
 
-pub(crate) struct OpfsError {
-    js_err: JsValue,
+/// Helper to convert JsValue to io::Error via OpfsError
+#[inline]
+pub(crate) fn opfs_err(err: JsValue) -> io::Error {
+    OpfsError::from(err).into()
 }
 
-impl OpfsError {
-    pub(crate) fn into_io_err(self) -> io::Error {
-        self.into()
-    }
+pub(crate) struct OpfsError {
+    js_err: JsValue,
 }
 
 impl From<JsValue> for OpfsError {

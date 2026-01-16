@@ -3,7 +3,7 @@ use std::{io, path::Path};
 use tokio::sync::mpsc;
 
 #[cfg(feature = "opfs_watch")]
-use super::opfs::watch::{event, watch_dir, WatchHandle};
+use super::opfs::watch::{event, watch_dir};
 use super::{
     Metadata, ReadDir, copy, create_dir, create_dir_all, metadata, read, read_dir, remove_dir,
     remove_dir_all, remove_file, write,
@@ -13,8 +13,6 @@ mod client;
 mod server;
 mod task;
 
-#[cfg(feature = "opfs_watch")]
-pub use self::client::OffloadWatchHandle;
 pub use self::{client::Client, server::Server, task::FsTask};
 
 pub fn split() -> (Server, Client) {
@@ -39,8 +37,8 @@ pub trait FsOffload {
         &self,
         path: impl AsRef<Path>,
         recursive: bool,
-        cb: impl Fn(event::Event) + 'static,
-    ) -> io::Result<WatchHandle>;
+        cb: impl Fn(event::Event) + Send + Sync + 'static,
+    ) -> io::Result<()>;
 }
 
 pub struct FsOffloadDefault;
@@ -91,8 +89,8 @@ impl FsOffload for FsOffloadDefault {
         &self,
         path: impl AsRef<Path>,
         recursive: bool,
-        cb: impl Fn(event::Event) + 'static,
-    ) -> io::Result<WatchHandle> {
+        cb: impl Fn(event::Event) + Send + Sync + 'static,
+    ) -> io::Result<()> {
         watch_dir(path, recursive, cb).await
     }
 }

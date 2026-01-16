@@ -11,7 +11,7 @@ use web_sys::{FileSystemReadWriteOptions, FileSystemSyncAccessHandle};
 use super::{
     OpenOptions,
     metadata::{FileType, Metadata},
-    opfs::{OpfsError, PathLockGuard, SyncAccessMode, open_file},
+    opfs::{opfs_err, PathLockGuard, SyncAccessMode, open_file},
 };
 
 /// A file handle with exclusive access to the underlying OPFS file.
@@ -79,7 +79,7 @@ impl File {
 
     pub fn size(&self) -> io::Result<u64> {
         self.sync_access_handle.get_size().map_or_else(
-            |err| Err(OpfsError::from(err).into_io_err()),
+            |err| Err(opfs_err(err)),
             |size| Ok(size as u64),
         )
     }
@@ -105,7 +105,7 @@ impl File {
         }
         self.sync_access_handle
             .truncate_with_f64(size as _)
-            .map_err(|err| OpfsError::from(err).into_io_err())
+            .map_err(opfs_err)
     }
 }
 
@@ -118,7 +118,7 @@ impl File {
                 let size = self
                     .sync_access_handle
                     .read_with_u8_array_and_options(buf, &options)
-                    .map_err(|err| OpfsError::from(err).into_io_err())?
+                    .map_err(opfs_err)?
                     as u64;
                 Ok(size)
             }
@@ -126,7 +126,7 @@ impl File {
                 let size = self
                     .sync_access_handle
                     .read_with_u8_array(buf)
-                    .map_err(|err| OpfsError::from(err).into_io_err())?
+                    .map_err(opfs_err)?
                     as u64;
                 Ok(size)
             }
@@ -141,7 +141,7 @@ impl File {
                 let size = self
                     .sync_access_handle
                     .write_with_u8_array_and_options(buf.as_ref(), &options)
-                    .map_err(|err| OpfsError::from(err).into_io_err())?
+                    .map_err(opfs_err)?
                     as u64;
                 Ok(size)
             }
@@ -149,7 +149,7 @@ impl File {
                 let size = self
                     .sync_access_handle
                     .write_with_u8_array(buf.as_ref())
-                    .map_err(|err| OpfsError::from(err).into_io_err())?
+                    .map_err(opfs_err)?
                     as u64;
                 Ok(size)
             }
@@ -159,7 +159,7 @@ impl File {
     pub(super) fn flush(&self) -> io::Result<()> {
         self.sync_access_handle
             .flush()
-            .map_err(|err| OpfsError::from(err).into_io_err())
+            .map_err(opfs_err)
     }
 
     pub(crate) fn close(&self) {

@@ -1,6 +1,3 @@
-use std::pin::Pin;
-use std::future::Future;
-
 use futures::stream::{FuturesUnordered, StreamExt};
 use tokio::sync::mpsc;
 
@@ -12,7 +9,7 @@ pub struct Server {
 
 impl Server {
     pub async fn serve(&mut self, offload: impl FsOffload) {
-        let mut tasks: FuturesUnordered<Pin<Box<dyn Future<Output = ()>>>> = FuturesUnordered::new();
+        let mut tasks = FuturesUnordered::new();
         let offload = &offload;
 
         loop {
@@ -20,18 +17,9 @@ impl Server {
                 res = self.receiver.recv() => {
                     match res {
                         Some(task) => {
-                            #[cfg(feature = "opfs_watch")]
-                            if let FsTask::WatchDir { path, recursive, cb, sender } = task {
-                                // WatchDir needs special handling - keep WatchHandle on server side
-                                tasks.push(Box::pin(async move {
-                                    FsTask::execute_watch(path, recursive, cb, sender, offload).await;
-                                }));
-                                continue;
-                            }
-                            
-                            tasks.push(Box::pin(async move {
+                            tasks.push(async move {
                                 task.execute(offload).await;
-                            }));
+                            });
                         }
                         None => {
                             while (tasks.next().await).is_some() {}

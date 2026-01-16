@@ -15,7 +15,7 @@ use web_sys::FileSystemHandle;
 
 use super::{
     metadata::{FileType, Metadata},
-    opfs::{OpfsError, open_dir},
+    opfs::{opfs_err, open_dir},
 };
 
 pub async fn read_dir(path: impl AsRef<Path>) -> io::Result<ReadDir> {
@@ -23,7 +23,7 @@ pub async fn read_dir(path: impl AsRef<Path>) -> io::Result<ReadDir> {
     let entries = JsStream::from(dir_handle.entries())
         .map(|handle| {
             handle.map_or_else(
-                |err| Err(OpfsError::from(err).into_io_err()),
+                |err| Err(opfs_err(err)),
                 |entry| {
                     Ok({
                         let js_array = Array::from(&entry);
