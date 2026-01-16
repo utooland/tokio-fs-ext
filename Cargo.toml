@@ -50,6 +50,8 @@ web-sys = { version = "0.3.83", features = [
   "Navigator",
   "StorageManager",
   "WorkerNavigator",
+  "File",
+  "Blob",
   "console",
 ] }
 wasm-bindgen = { version = "0.2.106", default-features = false }

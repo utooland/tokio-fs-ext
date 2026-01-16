@@ -6,6 +6,13 @@ macro_rules! log {
 }
 
 #[macro_export]
+macro_rules! warning {
+    ($($arg:tt)*) => (
+        web_sys::console::warn_1(&wasm_bindgen::JsValue::from(&format!($($arg)*)))
+    )
+}
+
+#[macro_export]
 macro_rules! error {
     ($($arg:tt)*) => (
         web_sys::console::error_1(&wasm_bindgen::JsValue::from(&format!($($arg)*)))
@@ -14,3 +21,4 @@ macro_rules! error {
 
 pub use error;
 pub use log;
+pub use warning;
