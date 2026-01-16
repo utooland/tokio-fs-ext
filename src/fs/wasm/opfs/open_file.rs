@@ -14,7 +14,7 @@ use super::{
     super::File,
     OpenDirType,
     error::OpfsError,
-    file_lock::lock_path,
+    file_lock::try_lock_path,
     open_dir,
     options::{CreateFileMode, CreateSyncAccessHandleOptions, SyncAccessMode},
     root::root,
@@ -28,9 +28,15 @@ pub(crate) async fn open_file(
     mode: SyncAccessMode,
     truncate: bool,
 ) -> io::Result<File> {
-    // Acquire cooperative lock first to prevent concurrent access attempts
+    // Try to acquire cooperative lock - fail immediately if file is already locked
+    // This prevents deadlock in single-threaded WASM environment
     let virt_path = virtualize::virtualize(path.as_ref())?;
-    let lock_guard = lock_path(&virt_path).await;
+    let lock_guard = try_lock_path(&virt_path).ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::WouldBlock,
+            "file is already opened by another handle",
+        )
+    })?;
 
     let handle = get_fs_handle(path, create).await?;
 

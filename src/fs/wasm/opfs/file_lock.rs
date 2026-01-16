@@ -64,6 +64,9 @@ pub(crate) fn is_path_locked(path: &Path) -> bool {
 }
 
 /// Async lock acquisition - waits until the path becomes available
+/// Note: In single-threaded WASM, this can cause deadlock if the same task
+/// tries to acquire a lock it already holds. Use try_lock_path for non-blocking.
+#[allow(dead_code)]
 pub(crate) fn lock_path(path: &Path) -> PathLockFuture {
     PathLockFuture {
         path: normalize_path(path),
@@ -91,6 +94,7 @@ fn normalize_path(path: &Path) -> PathBuf {
 }
 
 /// Future that resolves when a path lock is acquired
+#[allow(dead_code)]
 pub(crate) struct PathLockFuture {
     path: PathBuf,
 }
