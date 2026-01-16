@@ -3,7 +3,7 @@ use std::{io, path::PathBuf};
 use tokio::sync::oneshot;
 
 #[cfg(feature = "opfs_watch")]
-use super::super::opfs::watch::{event, watch_dir};
+use super::super::opfs::watch::{event, WatchHandle};
 use super::{FsOffload, Metadata, ReadDir};
 
 pub enum FsTask {
@@ -53,8 +53,8 @@ pub enum FsTask {
     WatchDir {
         path: PathBuf,
         recursive: bool,
-        cb: Box<dyn Fn(event::Event) + Send + Sync + 'static>,
-        sender: oneshot::Sender<io::Result<()>>,
+        cb: Box<dyn Fn(event::Event) + 'static>,
+        sender: oneshot::Sender<io::Result<WatchHandle>>,
     },
 }
 
@@ -94,6 +94,6 @@ impl_fs_task_execute!(
         (RemoveDirAll, remove_dir_all, (path: PathBuf)),
         (Metadata, metadata, (path: PathBuf)),
         #[cfg(feature = "opfs_watch")]
-        (WatchDir, watch_dir, (path: PathBuf, recursive: bool, cb: Box<dyn Fn(event::Event) + Send + Sync + 'static> ))
+        (WatchDir, watch_dir, (path: PathBuf, recursive: bool, cb: Box<dyn Fn(event::Event) + 'static> ))
     ]
 );

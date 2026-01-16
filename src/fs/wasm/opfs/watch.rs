@@ -1,13 +1,15 @@
 use std::{
     io,
     path::{Path, PathBuf},
+    rc::Rc,
 };
 
 use js_sys::{Array, JsString};
 pub use notify_types::event;
 use wasm_bindgen::{
     JsCast,
-    prelude::{Closure, wasm_bindgen},
+    closure::Closure,
+    prelude::wasm_bindgen,
 };
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
@@ -72,6 +74,28 @@ impl FileSystemDirObserverOptions {
 impl Default for FileSystemDirObserverOptions {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Handle to stop watching. When dropped, the watch is automatically stopped.
+pub struct WatchHandle {
+    observer: FileSystemObserver,
+    // Keep closure alive to prevent GC
+    #[allow(dead_code)]
+    closure: Rc<Closure<dyn Fn(Array)>>,
+}
+
+impl WatchHandle {
+    /// Stop watching and release resources
+    pub fn stop(self) {
+        self.observer.disconnect();
+        // closure will be dropped here
+    }
+}
+
+impl Drop for WatchHandle {
+    fn drop(&mut self) {
+        self.observer.disconnect();
     }
 }
 
@@ -153,27 +177,44 @@ impl TryFrom<&FileSystemChangeRecord> for event::Event {
     }
 }
 
+/// Watch a directory for changes.
+///
+/// Returns a `WatchHandle` that must be kept alive for the watch to remain active.
+/// When the handle is dropped, the watch is automatically stopped.
+///
+/// # Arguments
+/// * `path` - The directory path to watch
+/// * `recursive` - Whether to watch subdirectories recursively
+/// * `cb` - Callback function called for each file system event
+///
+/// # Example
+/// ```ignore
+/// let handle = watch_dir("/my/dir", true, |event| {
+///     println!("Event: {:?}", event);
+/// }).await?;
+///
+/// // Keep handle alive...
+/// // handle.stop(); // or let it drop
+/// ```
 pub async fn watch_dir(
     path: impl AsRef<Path>,
     recursive: bool,
-    cb: impl Fn(event::Event) + Send + Sync + 'static,
-) -> io::Result<()> {
-    let observer = FileSystemObserver::new(
-        Closure::<dyn Fn(Array)>::new(move |records: Array| {
-            records.iter().for_each(|record| {
-                let record: FileSystemChangeRecord = record.unchecked_into();
-                match event::Event::try_from(&record) {
-                    Ok(evt) => cb(evt),
-                    Err(_err) => {
-                        #[cfg(feature = "opfs_tracing")]
-                        tracing::error!("failed to parse event from record: {_err:?}");
-                    }
+    cb: impl Fn(event::Event) + 'static,
+) -> io::Result<WatchHandle> {
+    let closure = Rc::new(Closure::<dyn Fn(Array)>::new(move |records: Array| {
+        records.iter().for_each(|record| {
+            let record: FileSystemChangeRecord = record.unchecked_into();
+            match event::Event::try_from(&record) {
+                Ok(evt) => cb(evt),
+                Err(_err) => {
+                    #[cfg(feature = "opfs_tracing")]
+                    tracing::error!("failed to parse event from record: {_err:?}");
                 }
-            });
-        })
-        .into_js_value()
-        .unchecked_ref(),
-    );
+            }
+        });
+    }));
+
+    let observer = FileSystemObserver::new(closure.as_ref().as_ref().unchecked_ref());
 
     let dir_handle = super::open_dir(path, OpenDirType::NotCreate).await?;
     let options = FileSystemDirObserverOptions::new();
@@ -181,43 +222,52 @@ pub async fn watch_dir(
     JsFuture::from(observer.observe_dir_with_options(&dir_handle, &options))
         .await
         .map_err(|e| OpfsError::from(e).into_io_err())?;
-    Ok(())
+
+    Ok(WatchHandle { observer, closure })
 }
 
+/// Watch a file for changes.
+///
+/// **Note**: This function opens the file with a `SyncAccessHandle`, which locks
+/// the file and prevents other operations. Consider using `watch_dir` on the
+/// parent directory instead if you need to perform other operations on the file.
+///
+/// Returns a `WatchHandle` that must be kept alive for the watch to remain active.
 #[allow(dead_code)]
 pub async fn watch_file(
     path: impl AsRef<Path>,
-    cb: impl Fn(event::Event) + Send + Sync + 'static,
-) -> io::Result<()> {
-    let observer = FileSystemObserver::new(
-        Closure::<dyn Fn(Array)>::new(move |records: Array| {
-            records.iter().for_each(|record| {
-                let record: FileSystemChangeRecord = record.unchecked_into();
-                match event::Event::try_from(&record) {
-                    Ok(evt) => cb(evt),
-                    Err(_err) => {
-                        #[cfg(feature = "opfs_tracing")]
-                        tracing::error!("failed to parse event from record: {_err:?}");
-                    }
+    cb: impl Fn(event::Event) + 'static,
+) -> io::Result<WatchHandle> {
+    let closure = Rc::new(Closure::<dyn Fn(Array)>::new(move |records: Array| {
+        records.iter().for_each(|record| {
+            let record: FileSystemChangeRecord = record.unchecked_into();
+            match event::Event::try_from(&record) {
+                Ok(evt) => cb(evt),
+                Err(_err) => {
+                    #[cfg(feature = "opfs_tracing")]
+                    tracing::error!("failed to parse event from record: {_err:?}");
                 }
-            });
-        })
-        .into_js_value()
-        .unchecked_ref(),
-    );
+            }
+        });
+    }));
 
-    let file_handle = open_file(
+    let observer = FileSystemObserver::new(closure.as_ref().as_ref().unchecked_ref());
+
+    let file = open_file(
         path,
         CreateFileMode::NotCreate,
         SyncAccessMode::Readonly,
         false,
     )
-    .await?
-    .sync_access_handle
-    .clone();
+    .await?;
 
-    JsFuture::from(observer.observe_file(&file_handle))
+    JsFuture::from(observer.observe_file(&file.sync_access_handle))
         .await
         .map_err(|e| OpfsError::from(e).into_io_err())?;
-    Ok(())
+
+    // Note: file handle remains open while watching
+    // This is necessary for the observer to work, but locks the file
+    std::mem::forget(file);
+
+    Ok(WatchHandle { observer, closure })
 }
