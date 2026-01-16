@@ -77,7 +77,7 @@ impl Default for FileSystemDirObserverOptions {
     }
 }
 
-/// Handle to stop watching. When dropped, the watch is automatically stopped.
+/// Handle to stop watching. Call `stop()` to cancel the watch.
 pub struct WatchHandle {
     observer: FileSystemObserver,
     // Keep closure alive to prevent GC
@@ -90,12 +90,6 @@ impl WatchHandle {
     pub fn stop(self) {
         self.observer.disconnect();
         // closure will be dropped here
-    }
-}
-
-impl Drop for WatchHandle {
-    fn drop(&mut self) {
-        self.observer.disconnect();
     }
 }
 

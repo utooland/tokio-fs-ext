@@ -13,6 +13,8 @@ mod client;
 mod server;
 mod task;
 
+#[cfg(feature = "opfs_watch")]
+pub use self::client::OffloadWatchHandle;
 pub use self::{client::Client, server::Server, task::FsTask};
 
 pub fn split() -> (Server, Client) {

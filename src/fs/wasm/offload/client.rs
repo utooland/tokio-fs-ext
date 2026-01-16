@@ -3,8 +3,45 @@ use std::{io, path::Path};
 use tokio::sync::{mpsc, oneshot};
 
 #[cfg(feature = "opfs_watch")]
-use super::super::opfs::watch::{event, WatchHandle};
+use super::super::opfs::watch::event;
 use super::{FsTask, Metadata, ReadDir};
+
+#[cfg(feature = "opfs_watch")]
+use tokio::sync::mpsc as watch_mpsc;
+
+/// Handle to stop watching in offload mode.
+/// When dropped or `stop()` is called, the watch is stopped on the server side.
+#[cfg(feature = "opfs_watch")]
+pub struct OffloadWatchHandle {
+    stop_sender: Option<watch_mpsc::Sender<()>>,
+}
+
+// Ensure OffloadWatchHandle is Send + Sync for multi-threaded WASM
+#[cfg(feature = "opfs_watch")]
+const _: () = {
+    const fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<OffloadWatchHandle>();
+};
+
+#[cfg(feature = "opfs_watch")]
+impl OffloadWatchHandle {
+    /// Stop watching and release resources on the server side
+    pub async fn stop(mut self) {
+        if let Some(sender) = self.stop_sender.take() {
+            let _ = sender.send(()).await;
+        }
+    }
+}
+
+#[cfg(feature = "opfs_watch")]
+impl Drop for OffloadWatchHandle {
+    fn drop(&mut self) {
+        if let Some(sender) = self.stop_sender.take() {
+            // Best effort - if channel is full or closed, watch will stop anyway
+            let _ = sender.try_send(());
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct Client {
@@ -75,16 +112,20 @@ impl Client {
         &self,
         path: impl AsRef<Path>,
         recursive: bool,
-        cb: impl Fn(event::Event) + 'static,
-    ) -> io::Result<WatchHandle> {
+        cb: impl Fn(event::Event) + Send + Sync + 'static,
+    ) -> io::Result<OffloadWatchHandle> {
         let path = path.as_ref().into();
-        self.dispatch(|sender| FsTask::WatchDir {
-            path,
-            recursive,
-            cb: Box::new(cb),
-            sender,
+        let stop_sender = self
+            .dispatch(|sender| FsTask::WatchDir {
+                path,
+                recursive,
+                cb: Box::new(cb),
+                sender,
+            })
+            .await?;
+        Ok(OffloadWatchHandle {
+            stop_sender: Some(stop_sender),
         })
-        .await
     }
 
     async fn dispatch<T, F>(&self, create_task: F) -> io::Result<T>
