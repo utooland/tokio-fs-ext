@@ -305,8 +305,10 @@ async fn test_open_options_readonly_permission_denied() {
 
     let _readonly_file = OpenOptions::new().read(true).open(path).await.unwrap();
 
+    // When a file is opened with SyncAccessHandle, write() will fail with WouldBlock
+    // because the file is locked by the existing handle
     let err = write(path, "attempt to write").await.unwrap_err();
-    assert_eq!(err.kind(), io::ErrorKind::PermissionDenied);
+    assert_eq!(err.kind(), io::ErrorKind::WouldBlock);
 
     let _ = remove_file(path).await;
 }
