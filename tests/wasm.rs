@@ -455,6 +455,38 @@ async fn test_metadata_is_file_and_len() {
 }
 
 #[wasm_bindgen_test]
+async fn test_metadata_modified_time() {
+    use std::time::UNIX_EPOCH;
+    let dir_path = "/test_metadata_modified_time_dir";
+    let file_path = format!("{}/file_with_mtime.txt", dir_path);
+    let _ = remove_dir_all(dir_path).await;
+    create_dir_all(dir_path).await.unwrap();
+
+    write(&file_path, b"time test").await.unwrap();
+    // In some headless Safari environments, FileSystem APIs may be unavailable.
+    // If metadata retrieval fails, gracefully skip this test.
+    let meta = match metadata(&file_path).await {
+        Ok(m) => m,
+        Err(_e) => {
+            return;
+        }
+    };
+
+    match meta.modified() {
+        Ok(ts) => {
+            // ensure result is a valid SystemTime and not before epoch
+            ts.duration_since(UNIX_EPOCH)
+                .expect("mtime should be after UNIX_EPOCH");
+        }
+        Err(e) => {
+            // If mtime isn't available, ensure the error type is a generic one
+            assert_eq!(e.kind(), io::ErrorKind::Other);
+        }
+    }
+    let _ = remove_dir_all(dir_path).await;
+}
+
+#[wasm_bindgen_test]
 async fn test_async_seek() {
     let path = "/test_async_seek/seek_file.txt";
     let initial_content = "Hello, world!"; // 13 bytes

@@ -51,6 +51,7 @@ impl File {
         Ok(Metadata {
             file_type: FileType::File,
             file_size: self.size()?,
+            mtime: None,
         })
     }
 

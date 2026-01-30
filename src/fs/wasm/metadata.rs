@@ -1,8 +1,12 @@
-use std::{io, path::Path};
+use std::{
+    io,
+    path::Path,
+    time::{Duration, SystemTime},
+};
 
 use web_sys::FileSystemHandleKind;
 
-use super::opfs::{opfs_err, open_dir};
+use super::opfs::{open_dir, opfs_err};
 
 /// Symlink is not supported.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -48,13 +52,16 @@ impl From<FileSystemHandleKind> for FileType {
 pub struct Metadata {
     pub(crate) file_type: FileType,
     pub(crate) file_size: u64,
+    // Modification time in milliseconds since epoch, if available.
+    pub(crate) mtime: Option<u64>,
 }
 
 impl Metadata {
-    pub fn new(file_type: FileType, file_size: u64) -> Self {
+    pub fn new(file_type: FileType, file_size: u64, mtime: Option<u64>) -> Self {
         Self {
             file_type,
             file_size,
+            mtime,
         }
     }
 }
@@ -76,6 +83,15 @@ impl Metadata {
     pub fn len(&self) -> u64 {
         self.file_size
     }
+
+    // Implement analogous to std::fs::Metadata::modified
+    // Returns the modification time as a SystemTime if available.
+    pub fn modified(&self) -> io::Result<SystemTime> {
+        match self.mtime {
+            Some(ms) => Ok(SystemTime::UNIX_EPOCH + Duration::from_millis(ms)),
+            None => Err(io::Error::new(io::ErrorKind::Other, "mtime not available")),
+        }
+    }
 }
 
 pub async fn metadata(path: impl AsRef<Path>) -> io::Result<Metadata> {
@@ -92,9 +108,15 @@ pub async fn metadata(path: impl AsRef<Path>) -> io::Result<Metadata> {
                 .as_f64()
                 .unwrap_or(0.0) as u64;
 
+            let mtime = js_sys::Reflect::get(&file_val, &"lastModified".into())
+                .map_err(opfs_err)?
+                .as_f64()
+                .map(|v| v as u64);
+
             Ok(Metadata {
                 file_type: FileType::File,
                 file_size: size,
+                mtime,
             })
         }
         Err(_) => Ok(open_dir(path, super::opfs::OpenDirType::NotCreate)
@@ -102,6 +124,7 @@ pub async fn metadata(path: impl AsRef<Path>) -> io::Result<Metadata> {
             .map(|_| Metadata {
                 file_type: FileType::Directory,
                 file_size: 0,
+                mtime: None,
             })?),
     }
 }
