@@ -32,8 +32,8 @@ tokio = { version = "1.47.1", default-features = false, features = [
 tokio-stream = { version = "0.1.17", features = ["fs"] }
 
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dependencies]
-js-sys = "0.3.83"
-web-sys = { version = "0.3.83", features = [
+js-sys = "0.3.85"
+web-sys = { version = "0.3.85", features = [
   "DedicatedWorkerGlobalScope",
   "DomException",
   "FileSystemDirectoryHandle",
@@ -54,8 +54,8 @@ web-sys = { version = "0.3.83", features = [
   "Blob",
   "console",
 ] }
-wasm-bindgen = { version = "0.2.106", default-features = false }
-wasm-bindgen-futures = { version = "0.4.56", features = [
+wasm-bindgen = { version = "0.2.108", default-features = false }
+wasm-bindgen-futures = { version = "0.4.58", features = [
   "futures-core-03-stream",
 ] }
 tokio = { version = "1.47.1", default-features = false, optional = true }
@@ -65,7 +65,7 @@ notify-types = { version = "2.0.0", optional = true }
 tracing = { version = "0.1.41", optional = true }
 
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dev-dependencies]
-wasm-bindgen-test = "=0.3.56"
+wasm-bindgen-test = "0.3.56"
 
 [target.'cfg(not(all(target_family = "wasm", target_os = "unknown")))'.dev-dependencies]
 tokio = { version = "1.47.1", features = ["macros", "test-util"] }
