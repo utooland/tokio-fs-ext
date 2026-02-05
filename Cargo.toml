@@ -1,6 +1,6 @@
 [package]
 name = "tokio-fs-ext"
-version = "0.7.1"
+version = "0.7.3"
 edition = "2024"
 authors = ["xusd320"]
 description = "Extend tokio fs to be compatible with native and wasm"
@@ -65,7 +65,7 @@ notify-types = { version = "2.0.0", optional = true }
 tracing = { version = "0.1.41", optional = true }
 
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dev-dependencies]
-wasm-bindgen-test = "0.3.56"
+wasm-bindgen-test = "0.3.58"
 
 [target.'cfg(not(all(target_family = "wasm", target_os = "unknown")))'.dev-dependencies]
 tokio = { version = "1.47.1", features = ["macros", "test-util"] }

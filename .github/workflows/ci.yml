@@ -31,6 +31,8 @@ jobs:
           cargo test --target wasm32-unknown-unknown
         env:
           RUST_BACKTRACE: 1
+          CHROMEDRIVER: chromedriver
+          WASM_BINDGEN_TEST_TIMEOUT: 60
 
       - name: Run build
         run: |

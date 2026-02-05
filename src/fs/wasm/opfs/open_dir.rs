@@ -9,8 +9,8 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{FileSystemDirectoryHandle, FileSystemGetDirectoryOptions};
 
 use super::{
-    opfs_err,
     dir_handle_cache::{get_cached_dir_handle, set_cached_dir_handle},
+    opfs_err,
     options::OpenDirType,
     root::root,
     virtualize,

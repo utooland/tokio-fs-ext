@@ -159,22 +159,26 @@ pub async fn watch_dir(
     cb: impl Fn(event::Event) + Send + Sync + 'static,
 ) -> io::Result<()> {
     #[cfg(feature = "opfs_tracing")]
-    tracing::info!("watch_dir: setting up observer for path: {:?}, recursive: {}", path.as_ref(), recursive);
-    
+    tracing::info!(
+        "watch_dir: setting up observer for path: {:?}, recursive: {}",
+        path.as_ref(),
+        recursive
+    );
+
     let observer = FileSystemObserver::new(
         Closure::<dyn Fn(Array)>::new(move |records: Array| {
             #[cfg(feature = "opfs_tracing")]
             tracing::info!("watch_dir: received {} records", records.length());
-            
+
             records.iter().for_each(|record| {
                 let record: FileSystemChangeRecord = record.unchecked_into();
-                
+
                 match event::Event::try_from(&record) {
                     Ok(evt) => {
                         #[cfg(feature = "opfs_tracing")]
                         tracing::info!("watch_dir: parsed event: {:?}", evt);
                         cb(evt)
-                    },
+                    }
                     Err(_err) => {
                         #[cfg(feature = "opfs_tracing")]
                         tracing::error!("failed to parse event from record: {_err:?}");
@@ -189,16 +193,16 @@ pub async fn watch_dir(
     let dir_handle = super::open_dir(path, OpenDirType::NotCreate).await?;
     #[cfg(feature = "opfs_tracing")]
     tracing::info!("watch_dir: got dir_handle: {:?}", dir_handle.name());
-    
+
     let options = FileSystemDirObserverOptions::new();
     options.set_recursive(recursive);
     JsFuture::from(observer.observe_dir_with_options(&dir_handle, &options))
         .await
         .map_err(opfs_err)?;
-    
+
     #[cfg(feature = "opfs_tracing")]
     tracing::info!("watch_dir: observer started successfully");
-    
+
     Ok(())
 }
 

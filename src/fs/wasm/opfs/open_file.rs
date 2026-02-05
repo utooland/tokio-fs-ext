@@ -14,7 +14,6 @@ use super::{
     super::File,
     OpenDirType,
     error::opfs_err,
-    file_lock::try_lock_path,
     open_dir,
     options::{CreateFileMode, CreateSyncAccessHandleOptions, SyncAccessMode},
     root::root,
@@ -28,25 +27,9 @@ pub(crate) async fn open_file(
     mode: SyncAccessMode,
     truncate: bool,
 ) -> io::Result<File> {
-    // Try to acquire cooperative lock - fail immediately if file is already locked
-    // This prevents deadlock in single-threaded WASM environment
-    let virt_path = virtualize::virtualize(path.as_ref())?;
-    let lock_guard = try_lock_path(&virt_path).ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::WouldBlock,
-            "file is already opened by another handle",
-        )
-    })?;
+    let handle = get_fs_handle(&path, create).await?;
 
-    let handle = get_fs_handle(path, create).await?;
-
-    let sync_access_handle = match create_sync_access_handle(&handle, mode).await {
-        Ok(h) => h,
-        Err(e) => {
-            // Lock guard will be dropped here, releasing the lock
-            return Err(e);
-        }
-    };
+    let sync_access_handle = create_sync_access_handle(&handle, mode).await?;
 
     if truncate {
         sync_access_handle.truncate_with_u32(0).map_or_else(
@@ -65,7 +48,6 @@ pub(crate) async fn open_file(
     Ok(File {
         sync_access_handle,
         pos: None,
-        lock_guard,
     })
 }
 
@@ -77,12 +59,10 @@ pub(crate) async fn get_fs_handle(
 
     match create {
         CreateFileMode::Create => get_raw_handle(&name, &dir_entry, true).await,
-        CreateFileMode::CreateNew => {
-            match get_raw_handle(&name, &dir_entry, false).await {
-                Ok(_) => Err(io::Error::from(io::ErrorKind::AlreadyExists)),
-                Err(_) => get_raw_handle(&name, &dir_entry, true).await,
-            }
-        }
+        CreateFileMode::CreateNew => match get_raw_handle(&name, &dir_entry, false).await {
+            Ok(_) => Err(io::Error::from(io::ErrorKind::AlreadyExists)),
+            Err(_) => get_raw_handle(&name, &dir_entry, true).await,
+        },
         CreateFileMode::NotCreate => get_raw_handle(&name, &dir_entry, false).await,
     }
 }

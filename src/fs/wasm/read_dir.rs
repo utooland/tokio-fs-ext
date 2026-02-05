@@ -15,7 +15,7 @@ use web_sys::FileSystemHandle;
 
 use super::{
     metadata::{FileType, Metadata},
-    opfs::{opfs_err, open_dir},
+    opfs::{open_dir, opfs_err},
 };
 
 pub async fn read_dir(path: impl AsRef<Path>) -> io::Result<ReadDir> {
