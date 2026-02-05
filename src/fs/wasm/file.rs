@@ -6,7 +6,9 @@ use std::{
 };
 
 use futures::io::{AsyncRead, AsyncSeek, AsyncWrite};
-use web_sys::{FileSystemReadWriteOptions, FileSystemSyncAccessHandle};
+use web_sys::{
+    FileSystemFileHandle, FileSystemReadWriteOptions, FileSystemSyncAccessHandle,
+};
 
 use super::{
     OpenOptions,
@@ -19,6 +21,7 @@ use super::{
 /// The file lock is automatically released when the `File` is dropped.
 #[derive(Debug)]
 pub struct File {
+    pub(super) handle: FileSystemFileHandle,
     pub(super) sync_access_handle: FileSystemSyncAccessHandle,
     pub(super) pos: Option<u64>,
 }
@@ -28,7 +31,7 @@ impl File {
         open_file(
             path,
             super::opfs::CreateFileMode::Create,
-            SyncAccessMode::Readonly,
+            SyncAccessMode::ReadwriteUnsafe,
             true,
         )
         .await
@@ -38,7 +41,7 @@ impl File {
         open_file(
             &path,
             super::opfs::CreateFileMode::CreateNew,
-            SyncAccessMode::Readonly,
+            SyncAccessMode::ReadwriteUnsafe,
             false,
         )
         .await

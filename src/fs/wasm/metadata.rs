@@ -6,7 +6,7 @@ use std::{
 
 use web_sys::FileSystemHandleKind;
 
-use super::opfs::{open_dir, opfs_err};
+use super::opfs::{CreateFileMode, SyncAccessMode, open_dir, open_file, opfs_err};
 
 /// Symlink is not supported.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -89,7 +89,7 @@ impl Metadata {
     pub fn modified(&self) -> io::Result<SystemTime> {
         match self.mtime {
             Some(ms) => Ok(SystemTime::UNIX_EPOCH + Duration::from_millis(ms)),
-            None => Err(io::Error::new(io::ErrorKind::Other, "mtime not available")),
+            None => Err(io::Error::other("mtime not available")),
         }
     }
 }
@@ -97,9 +97,9 @@ impl Metadata {
 pub async fn metadata(path: impl AsRef<Path>) -> io::Result<Metadata> {
     let path = path.as_ref();
 
-    match super::opfs::get_fs_handle(path, super::opfs::CreateFileMode::NotCreate).await {
-        Ok(handle) => {
-            let file_val = wasm_bindgen_futures::JsFuture::from(handle.get_file())
+    match open_file(path, CreateFileMode::NotCreate, SyncAccessMode::Readonly, false).await {
+        Ok(file) => {
+            let file_val = wasm_bindgen_futures::JsFuture::from(file.handle.get_file())
                 .await
                 .map_err(opfs_err)?;
 

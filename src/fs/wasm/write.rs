@@ -5,13 +5,12 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::FileSystemWritableFileStream;
 
-use super::opfs::{CreateFileMode, get_fs_handle, opfs_err, virtualize};
+use super::opfs::{CreateFileMode, SyncAccessMode, open_file, opfs_err};
 
 pub async fn write(path: impl AsRef<Path>, content: impl AsRef<[u8]>) -> io::Result<()> {
-    let virt_path = virtualize(&path)?;
-    let handle = get_fs_handle(&virt_path, CreateFileMode::Create).await?;
+    let file = open_file(path, CreateFileMode::Create, SyncAccessMode::ReadwriteUnsafe, true).await?;
 
-    let stream: FileSystemWritableFileStream = JsFuture::from(handle.create_writable())
+    let stream: FileSystemWritableFileStream = JsFuture::from(file.handle.create_writable())
         .await
         .map_err(opfs_err)?
         .unchecked_into();

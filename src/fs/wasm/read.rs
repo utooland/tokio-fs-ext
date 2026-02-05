@@ -5,18 +5,17 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::File as JsFile;
 
-use super::opfs::{CreateFileMode, get_fs_handle, opfs_err, virtualize};
+use super::opfs::{CreateFileMode, SyncAccessMode, open_file, opfs_err};
 
 pub async fn read(path: impl AsRef<Path>) -> io::Result<Vec<u8>> {
-    let virt_path = virtualize(&path)?;
-    let handle = get_fs_handle(&virt_path, CreateFileMode::NotCreate).await?;
+    let file = open_file(path, CreateFileMode::NotCreate, SyncAccessMode::Readonly, false).await?;
 
-    let file: JsFile = JsFuture::from(handle.get_file())
+    let js_file: JsFile = JsFuture::from(file.handle.get_file())
         .await
         .map_err(opfs_err)?
         .unchecked_into();
 
-    let array_buffer = JsFuture::from(file.array_buffer())
+    let array_buffer = JsFuture::from(js_file.array_buffer())
         .await
         .map_err(opfs_err)?;
 

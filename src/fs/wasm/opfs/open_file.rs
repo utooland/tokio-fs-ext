@@ -46,6 +46,7 @@ pub(crate) async fn open_file(
         )?;
     }
     Ok(File {
+        handle,
         sync_access_handle,
         pos: None,
     })
