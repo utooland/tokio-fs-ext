@@ -15,6 +15,16 @@ const CHUNK_SIZE: u64 = 2 * 1024 * 1024;
 pub async fn copy(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<u64, io::Error> {
     let from_virt = virtualize(&from)?;
     let to_virt = virtualize(&to)?;
+    let from_virt = virtualize(&from)?;
+    let to_virt = virtualize(&to)?;
+
+    if from_virt == to_virt {
+        // If source and destination are the same after virtualization, it's a no-op.
+        // Acquire a single lock to prevent other operations on this path during this check.
+        let _lock = lock_path(&from_virt).await;
+        return Ok(0);
+    }
+
     let _lock_from = lock_path(&from_virt).await;
     let _lock_to = lock_path(&to_virt).await;
 
