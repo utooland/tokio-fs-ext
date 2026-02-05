@@ -11,11 +11,11 @@ use web_sys::{FileSystemReadWriteOptions, FileSystemSyncAccessHandle};
 use super::{
     OpenOptions,
     metadata::{FileType, Metadata},
-    opfs::{opfs_err, PathLockGuard, SyncAccessMode, open_file},
+    opfs::{PathLockGuard, SyncAccessMode, open_file, opfs_err},
 };
 
 /// A file handle with exclusive access to the underlying OPFS file.
-/// 
+///
 /// The file lock is automatically released when the `File` is dropped.
 #[derive(Debug)]
 pub struct File {
@@ -79,10 +79,9 @@ impl File {
     }
 
     pub fn size(&self) -> io::Result<u64> {
-        self.sync_access_handle.get_size().map_or_else(
-            |err| Err(opfs_err(err)),
-            |size| Ok(size as u64),
-        )
+        self.sync_access_handle
+            .get_size()
+            .map_or_else(|err| Err(opfs_err(err)), |size| Ok(size as u64))
     }
 
     /// Truncates or extends the underlying file, updating the size of this file to become `size`.
@@ -119,16 +118,14 @@ impl File {
                 let size = self
                     .sync_access_handle
                     .read_with_u8_array_and_options(buf, &options)
-                    .map_err(opfs_err)?
-                    as u64;
+                    .map_err(opfs_err)? as u64;
                 Ok(size)
             }
             None => {
                 let size = self
                     .sync_access_handle
                     .read_with_u8_array(buf)
-                    .map_err(opfs_err)?
-                    as u64;
+                    .map_err(opfs_err)? as u64;
                 Ok(size)
             }
         }
@@ -142,25 +139,21 @@ impl File {
                 let size = self
                     .sync_access_handle
                     .write_with_u8_array_and_options(buf.as_ref(), &options)
-                    .map_err(opfs_err)?
-                    as u64;
+                    .map_err(opfs_err)? as u64;
                 Ok(size)
             }
             None => {
                 let size = self
                     .sync_access_handle
                     .write_with_u8_array(buf.as_ref())
-                    .map_err(opfs_err)?
-                    as u64;
+                    .map_err(opfs_err)? as u64;
                 Ok(size)
             }
         }
     }
 
     pub(super) fn flush(&self) -> io::Result<()> {
-        self.sync_access_handle
-            .flush()
-            .map_err(opfs_err)
+        self.sync_access_handle.flush().map_err(opfs_err)
     }
 
     pub(crate) fn close(&self) {

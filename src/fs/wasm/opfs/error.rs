@@ -34,10 +34,9 @@ impl From<OpfsError> for io::Error {
                 ),
                 "TypeMismatchError" => io::Error::other("type mismatch"),
                 // QuotaExceededError: storage quota exceeded
-                "QuotaExceededError" => io::Error::new(
-                    io::ErrorKind::StorageFull,
-                    "storage quota exceeded",
-                ),
+                "QuotaExceededError" => {
+                    io::Error::new(io::ErrorKind::StorageFull, "storage quota exceeded")
+                }
                 msg => io::Error::other(msg),
             },
             None => io::Error::other(format!("{}", Object::from(opfs_err.js_err).to_string())),

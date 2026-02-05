@@ -4,13 +4,14 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::FileSystemRemoveOptions;
 
 use super::{
-    OpenDirType, opfs_err, dir_handle_cache::remove_cached_dir_handle, open_dir, root::root,
-    virtualize,
+    OpenDirType, dir_handle_cache::remove_cached_dir_handle, lock_path, open_dir, opfs_err,
+    root::root, virtualize,
 };
 
 #[cfg_attr(feature = "opfs_tracing", tracing::instrument(level = "trace", fields(path = %path.as_ref().to_string_lossy())))]
 pub(crate) async fn remove(path: impl AsRef<Path>, recursive: bool) -> io::Result<()> {
-    let virt = virtualize::virtualize(path)?;
+    let virt = virtualize::virtualize(&path)?;
+    let _lock = lock_path(&virt).await;
 
     let parent = virt.parent();
 

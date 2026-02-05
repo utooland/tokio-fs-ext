@@ -77,12 +77,10 @@ pub(crate) async fn get_fs_handle(
 
     match create {
         CreateFileMode::Create => get_raw_handle(&name, &dir_entry, true).await,
-        CreateFileMode::CreateNew => {
-            match get_raw_handle(&name, &dir_entry, false).await {
-                Ok(_) => Err(io::Error::from(io::ErrorKind::AlreadyExists)),
-                Err(_) => get_raw_handle(&name, &dir_entry, true).await,
-            }
-        }
+        CreateFileMode::CreateNew => match get_raw_handle(&name, &dir_entry, false).await {
+            Ok(_) => Err(io::Error::from(io::ErrorKind::AlreadyExists)),
+            Err(_) => get_raw_handle(&name, &dir_entry, true).await,
+        },
         CreateFileMode::NotCreate => get_raw_handle(&name, &dir_entry, false).await,
     }
 }
