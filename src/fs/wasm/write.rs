@@ -1,31 +1,18 @@
 use std::{io, path::Path};
 
-use js_sys::Uint8Array;
-use wasm_bindgen::JsCast;
-use wasm_bindgen_futures::JsFuture;
-use web_sys::FileSystemWritableFileStream;
-
-use super::opfs::{CreateFileMode, SyncAccessMode, open_file, opfs_err};
+use super::OpenOptions;
 
 pub async fn write(path: impl AsRef<Path>, content: impl AsRef<[u8]>) -> io::Result<()> {
-    let file = open_file(path, CreateFileMode::Create, SyncAccessMode::ReadwriteUnsafe, true).await?;
+    let mut file = OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open(path)
+        .await?;
 
-    let stream: FileSystemWritableFileStream = JsFuture::from(file.handle.create_writable())
-        .await
-        .map_err(opfs_err)?
-        .unchecked_into();
+    file.write_with_buf(content.as_ref())?;
 
-    // Copy data to a non-shared Uint8Array (WASM linear memory is shared)
-    let content = content.as_ref();
-    let uint8_array = Uint8Array::new_with_length(content.len() as u32);
-    uint8_array.copy_from(content);
-
-    let promise = stream
-        .write_with_js_u8_array(&uint8_array)
-        .map_err(opfs_err)?;
-
-    JsFuture::from(promise).await.map_err(opfs_err)?;
-    JsFuture::from(stream.close()).await.map_err(opfs_err)?;
+    file.sync_data().await?;
 
     Ok(())
 }

@@ -52,7 +52,7 @@ pub(crate) async fn open_file(
     })
 }
 
-pub(crate) async fn get_fs_handle(
+async fn get_fs_handle(
     path: impl AsRef<Path>,
     create: CreateFileMode,
 ) -> io::Result<FileSystemFileHandle> {

@@ -31,7 +31,7 @@ impl File {
         open_file(
             path,
             super::opfs::CreateFileMode::Create,
-            SyncAccessMode::ReadwriteUnsafe,
+            SyncAccessMode::Readonly,
             true,
         )
         .await
@@ -41,17 +41,26 @@ impl File {
         open_file(
             &path,
             super::opfs::CreateFileMode::CreateNew,
-            SyncAccessMode::ReadwriteUnsafe,
+            SyncAccessMode::Readonly,
             false,
         )
         .await
     }
 
     pub async fn metadata(&self) -> io::Result<Metadata> {
+        let file_val = wasm_bindgen_futures::JsFuture::from(self.handle.get_file())
+            .await
+            .map_err(opfs_err)?;
+
+        let mtime = js_sys::Reflect::get(&file_val, &"lastModified".into())
+            .map_err(opfs_err)?
+            .as_f64()
+            .map(|v| v as u64);
+
         Ok(Metadata {
             file_type: FileType::File,
             file_size: self.size()?,
-            mtime: None,
+            mtime,
         })
     }
 
