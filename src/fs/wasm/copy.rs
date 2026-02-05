@@ -5,7 +5,7 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Blob, FileSystemWritableFileStream};
 
-use super::opfs::{get_fs_handle, CreateFileMode, opfs_err};
+use super::opfs::{get_fs_handle, CreateFileMode, opfs_err, lock_path, virtualize};
 
 /// Files larger than this threshold will be copied in chunks (10 MB)
 const LARGE_FILE_THRESHOLD: u64 = 10 * 1024 * 1024;
@@ -13,6 +13,11 @@ const LARGE_FILE_THRESHOLD: u64 = 10 * 1024 * 1024;
 const CHUNK_SIZE: u64 = 2 * 1024 * 1024;
 
 pub async fn copy(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<u64, io::Error> {
+    let from_virt = virtualize(&from)?;
+    let to_virt = virtualize(&to)?;
+    let _lock_from = lock_path(&from_virt).await;
+    let _lock_to = lock_path(&to_virt).await;
+
     if from.as_ref() == to.as_ref() {
         return Ok(0);
     }

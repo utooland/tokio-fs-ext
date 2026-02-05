@@ -5,12 +5,13 @@ use web_sys::FileSystemRemoveOptions;
 
 use super::{
     OpenDirType, opfs_err, dir_handle_cache::remove_cached_dir_handle, open_dir, root::root,
-    virtualize,
+    virtualize, lock_path,
 };
 
 #[cfg_attr(feature = "opfs_tracing", tracing::instrument(level = "trace", fields(path = %path.as_ref().to_string_lossy())))]
 pub(crate) async fn remove(path: impl AsRef<Path>, recursive: bool) -> io::Result<()> {
-    let virt = virtualize::virtualize(path)?;
+    let virt = virtualize::virtualize(&path)?;
+    let _lock = lock_path(&virt).await;
 
     let parent = virt.parent();
 
