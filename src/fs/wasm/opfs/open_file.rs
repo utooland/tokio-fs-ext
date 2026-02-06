@@ -8,7 +8,7 @@ use web_sys::{
     FileSystemSyncAccessHandle,
 };
 
-use crate::current_dir;
+// use crate::current_dir;
 
 use super::{
     super::{
@@ -60,6 +60,7 @@ pub(crate) async fn open_file(
         handle,
         sync_access_handle,
         pos: Some(0),
+        mode,
         _lock,
     })
 }
@@ -105,17 +106,12 @@ async fn resolve_parent(path: &Path) -> io::Result<(FileSystemDirectoryHandle, S
     }?;
 
     let dir_entry = match parent {
-        Some(parent_path) => {
-            open_dir(
-                parent_path,
-                if parent_path == current_dir()? {
-                    OpenDirType::CreateRecursive
-                } else {
-                    OpenDirType::NotCreate
-                },
-            )
-            .await?
-        }
+        Some(parent_path) => open_dir(parent_path, OpenDirType::NotCreate)
+            .await
+            .inspect_err(|_| {
+                #[cfg(feature = "opfs_tracing")]
+                tracing::error!(path = %parent_path.display(), "Failed to open parent directory");
+            })?,
         None => root().await?,
     };
     Ok((dir_entry, name))

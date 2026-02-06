@@ -52,7 +52,15 @@ impl Drop for FileLockGuard {
 
                 if state.active_count == 0 {
                     let should_close = match state.waiters.front() {
-                        Some(next) => Some(next.mode) != state.mode,
+                        Some(next) => {
+                            // If we have a Readwrite handle, it can satisfy any subsequent request.
+                            // If we have a Readonly handle, only Readonly requests can be satisfied.
+                            !matches!(
+                                (state.mode, next.mode),
+                                (Some(SyncAccessMode::Readwrite), _)
+                                    | (Some(SyncAccessMode::Readonly), SyncAccessMode::Readonly)
+                            )
+                        }
                         None => true,
                     };
 
@@ -69,14 +77,18 @@ impl Drop for FileLockGuard {
 
                 // Wake up the next waiter(s)
                 while let Some(next) = state.waiters.front() {
-                    // If lock is free, wake the first one in line (could be any mode)
-                    // If lock is shared, wake all matching mode waiters at the front
-                    if state.active_count == 0 || Some(next.mode) == state.mode {
+                    let can_share = match (state.mode, next.mode) {
+                        (Some(SyncAccessMode::Readwrite), _) => true,
+                        (Some(SyncAccessMode::Readonly), SyncAccessMode::Readonly) => true,
+                        _ => false,
+                    };
+
+                    if state.active_count == 0 || can_share {
                         if let Some(task) = state.waiters.pop_front() {
                             task.waker.wake();
                         }
-                        // If it was the first acquisition, we stop and wait for it to poll
-                        // and potentially set a mode.
+                        // If the lock is free and we woke the first waiter, stop waking more
+                        // and let the first one poll and set the new mode.
                         if state.active_count == 0 && state.mode.is_none() {
                             break;
                         }
@@ -123,12 +135,17 @@ impl Future for FileLockFuture {
 
             let can_acquire = if state.active_count == 0 {
                 is_front
-            } else if Some(requested_mode) == state.mode {
-                // If the handle isn't ready yet (it's being opened by another task), 
-                // we must wait in the waiter list.
-                is_front && state.handle.is_some()
             } else {
-                false
+                match (state.mode, requested_mode) {
+                    // Readwrite handle can satisfy any request.
+                    (Some(SyncAccessMode::Readwrite), _) => state.handle.is_some(),
+                    // Readonly handle can only satisfy Readonly requests.
+                    (Some(SyncAccessMode::Readonly), SyncAccessMode::Readonly) => {
+                        state.handle.is_some()
+                    }
+                    // Otherwise (e.g. Readonly exists but Readwrite requested) must wait.
+                    _ => false,
+                }
             };
 
             if can_acquire {
@@ -214,6 +231,7 @@ pub struct File {
     pub(super) handle: FileSystemFileHandle,
     pub(super) sync_access_handle: FileSystemSyncAccessHandle,
     pub(super) pos: Option<u64>,
+    pub(super) mode: SyncAccessMode,
     pub(super) _lock: FileLockGuard,
 }
 
@@ -296,6 +314,13 @@ impl File {
     /// If the requested length is greater than 9007199254740991 (max safe integer in a floating-point context),
     /// this will produce an error.
     pub async fn set_len(&self, size: u64) -> io::Result<()> {
+        if self.mode == SyncAccessMode::Readonly {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "file is opened in read-only mode",
+            ));
+        }
+
         const MAX_SAFE_INT: u64 = js_sys::Number::MAX_SAFE_INTEGER as _;
         if size > MAX_SAFE_INT {
             return Err(std::io::Error::new(
@@ -332,6 +357,13 @@ impl File {
     }
 
     pub(crate) fn write_with_buf(&mut self, buf: impl AsRef<[u8]>) -> io::Result<u64> {
+        if self.mode == SyncAccessMode::Readonly {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "file is opened in read-only mode",
+            ));
+        }
+
         match self.pos {
             Some(pos) => {
                 let options = FileSystemReadWriteOptions::new();

@@ -300,15 +300,21 @@ async fn test_open_options_readonly_permission_denied() {
 
     {
         let _ = remove_file(path).await;
-        let _readonly_file = OpenOptions::new().create(true).open(path).await.unwrap();
+        let _readonly_file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .open(path)
+            .await
+            .unwrap();
     }
 
-    let _readonly_file = OpenOptions::new().read(true).open(path).await.unwrap();
+    {
+        let mut readonly_file = OpenOptions::new().read(true).open(path).await.unwrap();
 
-    // When a file is opened with SyncAccessHandle, write() will fail with WouldBlock
-    // because the file is locked by the existing handle
-    let err = write(path, "attempt to write").await.unwrap_err();
-    assert_eq!(err.kind(), io::ErrorKind::WouldBlock);
+        // Verify that writing to a readonly file fails
+        let err = readonly_file.write(b"attempt to write").await.unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::PermissionDenied);
+    }
 
     let _ = remove_file(path).await;
 }
@@ -363,18 +369,10 @@ async fn test_open_options_truncate() {
             .open(path)
             .await
             .unwrap();
-        // https://developer.mozilla.org/en-US/docs/Web/API/FileSystemFileHandle/createSyncAccessHandle#readwrite
-        // When a file is already opened, another open attempt will block (WouldBlock)
-        assert_eq!(
-            OpenOptions::new()
-                .read(true)
-                .open(path)
-                .await
-                .unwrap_err()
-                .kind(),
-            io::ErrorKind::WouldBlock
-        );
-        // Async read might succeed depending on implementation, but sync open MUST fail.
+
+        // With shared locking, opening Readonly while Readwrite is open should succeed
+        let shared_read = OpenOptions::new().read(true).open(path).await;
+        assert!(shared_read.is_ok());
     };
     assert!(read(path).await.unwrap().is_empty());
 
