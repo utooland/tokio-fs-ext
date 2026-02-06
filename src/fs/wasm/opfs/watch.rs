@@ -1,11 +1,8 @@
 use std::{
     io,
     path::{Path, PathBuf},
-    pin::Pin,
-    task::{Context, Poll},
 };
 
-use futures::{Stream, stream::FusedStream};
 use js_sys::{Array, JsString};
 pub use notify_types::event;
 use wasm_bindgen::{
@@ -151,65 +148,27 @@ fn record_to_event(record: &FileSystemChangeRecord, base_path: &Path) -> io::Res
     })
 }
 
-pub struct WatchStream {
-    receiver: Option<tokio::sync::mpsc::UnboundedReceiver<event::Event>>,
-    _observer: FileSystemObserver,
-    _closure: Closure<dyn Fn(Array)>,
-}
-
-unsafe impl Send for WatchStream {}
-unsafe impl Sync for WatchStream {}
-
-impl Drop for WatchStream {
-    fn drop(&mut self) {
-        self._observer.disconnect();
-    }
-}
-
-impl WatchStream {
-    /// Consumes the `WatchStream`, returning the inner receiver.
-    /// This is useful for offloading where the observer must stay in the worker.
-    pub fn into_inner(mut self) -> tokio::sync::mpsc::UnboundedReceiver<event::Event> {
-        self.receiver.take().expect("WatchStream already consumed")
-    }
-}
-
-impl Stream for WatchStream {
-    type Item = event::Event;
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        if let Some(ref mut receiver) = self.get_mut().receiver {
-            receiver.poll_recv(cx)
-        } else {
-            Poll::Ready(None)
-        }
-    }
-}
-
-impl FusedStream for WatchStream {
-    fn is_terminated(&self) -> bool {
-        false
-    }
-}
-
-pub async fn watch_dir(path: impl AsRef<Path>, recursive: bool) -> io::Result<WatchStream> {
+pub async fn watch_dir(
+    path: impl AsRef<Path>,
+    recursive: bool,
+    cb: impl Fn(event::Event) + Send + Sync + 'static,
+) -> io::Result<()> {
     let base_path = virtualize(path.as_ref())?;
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
 
-    let closure = Closure::<dyn Fn(Array)>::new({
-        let base_path = base_path.clone();
-        move |records: Array| {
+    let observer = FileSystemObserver::new(
+        Closure::<dyn Fn(Array)>::new(move |records: Array| {
             records.iter().for_each(|record| {
                 let record: FileSystemChangeRecord = record.unchecked_into();
                 if let Ok(evt) = record_to_event(&record, &base_path) {
-                    let _ = sender.send(evt);
+                    cb(evt);
                 }
             });
-        }
-    });
+        })
+        .into_js_value()
+        .unchecked_ref(),
+    );
 
-    let observer = FileSystemObserver::new(closure.as_ref().unchecked_ref());
-    let dir_handle = super::open_dir(&base_path, OpenDirType::NotCreate).await?;
+    let dir_handle = super::open_dir(path, OpenDirType::NotCreate).await?;
 
     let options = FileSystemDirObserverOptions::new();
     options.set_recursive(recursive);
@@ -217,48 +176,33 @@ pub async fn watch_dir(path: impl AsRef<Path>, recursive: bool) -> io::Result<Wa
         .await
         .map_err(opfs_err)?;
 
-    Ok(WatchStream {
-        receiver: Some(receiver),
-        _observer: observer,
-        _closure: closure,
-    })
+    Ok(())
 }
 
 #[allow(dead_code)]
-pub async fn watch_file(path: impl AsRef<Path>) -> io::Result<WatchStream> {
+pub async fn watch_file(
+    path: impl AsRef<Path>,
+    cb: impl Fn(event::Event) + Send + Sync + 'static,
+) -> io::Result<()> {
     let base_path = virtualize(path.as_ref())?;
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
 
-    let closure = Closure::<dyn Fn(Array)>::new({
-        let base_path = base_path.clone();
-        move |records: Array| {
+    let observer = FileSystemObserver::new(
+        Closure::<dyn Fn(Array)>::new(move |records: Array| {
             records.iter().for_each(|record| {
                 let record: FileSystemChangeRecord = record.unchecked_into();
                 if let Ok(evt) = record_to_event(&record, &base_path) {
-                    let _ = sender.send(evt);
+                    cb(evt);
                 }
             });
-        }
-    });
+        })
+        .into_js_value()
+        .unchecked_ref(),
+    );
 
-    let observer = FileSystemObserver::new(closure.as_ref().unchecked_ref());
-    let file_handle = super::open_file(
-        &base_path,
-        CreateFileMode::NotCreate,
-        super::SyncAccessMode::Readonly,
-        false,
-    )
-    .await?
-    .handle
-    .clone();
+    let file_handle = super::resolve_file_handle(path, CreateFileMode::NotCreate).await?;
 
     JsFuture::from(observer.observe_file(&file_handle))
         .await
         .map_err(opfs_err)?;
-
-    Ok(WatchStream {
-        receiver: Some(receiver),
-        _observer: observer,
-        _closure: closure,
-    })
+    Ok(())
 }

@@ -68,13 +68,6 @@ impl Drop for FileLockGuard {
 
             state.ref_count -= 1;
 
-            #[cfg(feature = "opfs_tracing")]
-            tracing::trace!(
-                path = %self.path.display(),
-                ref_count = state.ref_count,
-                "Released file lock"
-            );
-
             if state.ref_count == 0 {
                 // Last user — close the cached handle.
                 if let Some(h) = state.handle.take() {
@@ -140,9 +133,6 @@ impl Future for FileLockFuture {
                 state.waiters.retain(|w| w.id != this.id);
                 this.registered = false;
 
-                #[cfg(feature = "opfs_tracing")]
-                tracing::trace!(path = %this.path.display(), "Acquired file lock (creator)");
-
                 Poll::Ready((
                     FileLockGuard {
                         path: this.path.clone(),
@@ -155,13 +145,6 @@ impl Future for FileLockFuture {
                 state.ref_count += 1;
                 state.waiters.retain(|w| w.id != this.id);
                 this.registered = false;
-
-                #[cfg(feature = "opfs_tracing")]
-                tracing::trace!(
-                    path = %this.path.display(),
-                    ref_count = state.ref_count,
-                    "Acquired file lock (shared)"
-                );
 
                 Poll::Ready((
                     FileLockGuard {

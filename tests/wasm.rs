@@ -569,21 +569,25 @@ async fn test_current_dir() {
 
 #[cfg(feature = "opfs_watch")]
 #[wasm_bindgen_test]
-async fn test_watch_dir_stream() {
+async fn test_watch_dir_callback() {
     use futures::StreamExt;
-    let base_path = "/test_watch_dir_stream";
+    let base_path = "/test_watch_dir_callback";
     let _ = remove_dir_all(base_path).await;
     create_dir(base_path).await.unwrap();
 
-    let stream_res = watch_dir(base_path, true).await;
-    match stream_res {
-        Ok(mut stream) => {
+    let (tx, mut rx) = futures::channel::mpsc::unbounded();
+    let result = watch::watch_dir(base_path, true, move |event| {
+        let _ = tx.unbounded_send(event);
+    })
+    .await;
+    match result {
+        Ok(()) => {
             // Create a file to trigger an event
             let file_path = format!("{}/test.txt", base_path);
             write(&file_path, "hello").await.unwrap();
 
             // Wait for the event
-            let event = stream.next().await.expect("Should receive an event");
+            let event = rx.next().await.expect("Should receive an event");
             assert!(!event.paths.is_empty());
             assert!(event.paths[0].to_str().unwrap().contains("test.txt"));
             assert!(event.kind.is_create());
@@ -603,20 +607,24 @@ async fn test_watch_dir_stream() {
 
 #[cfg(feature = "opfs_watch")]
 #[wasm_bindgen_test]
-async fn test_watch_file_stream() {
+async fn test_watch_file_callback() {
     use futures::StreamExt;
-    let path = "/test_watch_file_stream.txt";
+    let path = "/test_watch_file_callback.txt";
     let _ = remove_file(path).await;
     write(path, "initial").await.unwrap();
 
-    let stream_res = watch_file(path).await;
-    match stream_res {
-        Ok(mut stream) => {
+    let (tx, mut rx) = futures::channel::mpsc::unbounded();
+    let result = watch::watch_file(path, move |event| {
+        let _ = tx.unbounded_send(event);
+    })
+    .await;
+    match result {
+        Ok(()) => {
             // Modify the file
             write(path, "updated").await.unwrap();
 
             // Wait for the event
-            let event = stream.next().await.expect("Should receive an event");
+            let event = rx.next().await.expect("Should receive an event");
             assert!(!event.paths.is_empty());
             assert!(event.kind.is_modify());
         }
@@ -643,13 +651,17 @@ async fn test_watch_remove_event() {
     let file_path = format!("{}/remove_me.txt", base_path);
     write(&file_path, "bye").await.unwrap();
 
-    let stream_res = watch_dir(base_path, false).await;
-    match stream_res {
-        Ok(mut stream) => {
+    let (tx, mut rx) = futures::channel::mpsc::unbounded();
+    let result = watch::watch_dir(base_path, false, move |event| {
+        let _ = tx.unbounded_send(event);
+    })
+    .await;
+    match result {
+        Ok(()) => {
             // Remove the file
             remove_file(&file_path).await.unwrap();
 
-            let event = stream.next().await.expect("Should receive an event");
+            let event = rx.next().await.expect("Should receive an event");
             assert!(event.kind.is_remove());
         }
         Err(e) => {
@@ -675,12 +687,16 @@ async fn test_watch_rename_event() {
     let new_path = format!("{}/new.txt", base_path);
     write(&old_path, "move me").await.unwrap();
 
-    let stream_res = watch_dir(base_path, false).await;
-    match stream_res {
-        Ok(mut stream) => {
+    let (tx, mut rx) = futures::channel::mpsc::unbounded();
+    let result = watch::watch_dir(base_path, false, move |event| {
+        let _ = tx.unbounded_send(event);
+    })
+    .await;
+    match result {
+        Ok(()) => {
             rename(&old_path, &new_path).await.unwrap();
 
-            let event = stream.next().await.expect("Should receive an event");
+            let event = rx.next().await.expect("Should receive an event");
 
             // In some environments, 'rename' may be reported as 'moved' (Modify),
             // in others as 'disappeared'/'appeared' (Remove/Create).

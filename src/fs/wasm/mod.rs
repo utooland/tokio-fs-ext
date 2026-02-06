@@ -49,4 +49,4 @@ pub use write::write;
 pub mod offload;
 
 #[cfg(feature = "opfs_watch")]
-pub use opfs::watch::{WatchStream, watch_dir, watch_file};
+pub use opfs::watch;

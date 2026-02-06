@@ -2,6 +2,8 @@ use std::{io, path::PathBuf};
 
 use tokio::sync::oneshot;
 
+#[cfg(feature = "opfs_watch")]
+use super::super::opfs::watch::event;
 use super::{FsOffload, Metadata, ReadDir};
 
 pub enum FsTask {
@@ -51,12 +53,8 @@ pub enum FsTask {
     WatchDir {
         path: PathBuf,
         recursive: bool,
-        sender: oneshot::Sender<io::Result<super::EventStream>>,
-    },
-    #[cfg(feature = "opfs_watch")]
-    WatchFile {
-        path: PathBuf,
-        sender: oneshot::Sender<io::Result<super::EventStream>>,
+        cb: Box<dyn Fn(event::Event) + Send + Sync + 'static>,
+        sender: oneshot::Sender<io::Result<()>>,
     },
 }
 
@@ -69,16 +67,6 @@ macro_rules! impl_fs_task_execute {
         impl $task_enum {
             pub(super) async fn execute(self, offload: &impl $offload_trait) {
                 match self {
-                    #[cfg(feature = "opfs_watch")]
-                    $task_enum::WatchDir { path, recursive, sender } => {
-                        let res = offload.watch_dir(path, recursive).await;
-                        let _ = sender.send(res.map(|s| super::EventStream { receiver: s.into_inner() }));
-                    }
-                    #[cfg(feature = "opfs_watch")]
-                    $task_enum::WatchFile { path, sender } => {
-                        let res = offload.watch_file(path).await;
-                        let _ = sender.send(res.map(|s| super::EventStream { receiver: s.into_inner() }));
-                    }
                     $(
                         $(#[$attr])*
                         $task_enum::$variant { $( $arg, )* sender } => {
@@ -104,6 +92,8 @@ impl_fs_task_execute!(
         (RemoveFile, remove_file, (path: PathBuf)),
         (RemoveDir, remove_dir, (path: PathBuf)),
         (RemoveDirAll, remove_dir_all, (path: PathBuf)),
-        (Metadata, metadata, (path: PathBuf))
+        (Metadata, metadata, (path: PathBuf)),
+        #[cfg(feature = "opfs_watch")]
+        (WatchDir, watch_dir, (path: PathBuf, recursive: bool, cb: Box<dyn Fn(event::Event) + Send + Sync + 'static> ))
     ]
 );

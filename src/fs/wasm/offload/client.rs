@@ -2,6 +2,8 @@ use std::{io, path::Path};
 
 use tokio::sync::{mpsc, oneshot};
 
+#[cfg(feature = "opfs_watch")]
+use super::super::opfs::watch::event;
 use super::{FsTask, Metadata, ReadDir};
 
 #[derive(Clone)]
@@ -73,21 +75,16 @@ impl Client {
         &self,
         path: impl AsRef<Path>,
         recursive: bool,
-    ) -> io::Result<super::EventStream> {
+        cb: impl Fn(event::Event) + Send + Sync + 'static,
+    ) -> io::Result<()> {
         let path = path.as_ref().into();
         self.dispatch(|sender| FsTask::WatchDir {
             path,
             recursive,
+            cb: Box::new(cb),
             sender,
         })
         .await
-    }
-
-    #[cfg(feature = "opfs_watch")]
-    pub async fn watch_file(&self, path: impl AsRef<Path>) -> io::Result<super::EventStream> {
-        let path = path.as_ref().into();
-        self.dispatch(|sender| FsTask::WatchFile { path, sender })
-            .await
     }
 
     async fn dispatch<T, F>(&self, create_task: F) -> io::Result<T>
