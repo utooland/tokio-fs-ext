@@ -18,25 +18,40 @@ use super::{
     opfs::{SyncAccessMode, open_file, opfs_err},
 };
 
+// ---------------------------------------------------------------------------
+// Per-path SyncAccessHandle cache with reference counting
+//
+// OPFS only allows one `createSyncAccessHandle` per file at a time.  To give
+// callers OS-like semantics (multiple `File` objects on the same path), we:
+//
+//   1. Always open handles in **Readwrite** mode (the most permissive mode).
+//   2. Cache the handle and clone it to every concurrent opener.
+//   3. Enforce the caller's requested read/write permission in the `File`
+//      layer via `File::mode`.
+//   4. Close the underlying handle only when the last user drops its guard.
+// ---------------------------------------------------------------------------
+
 thread_local! {
-    static LOCKS: RefCell<FxHashMap<PathBuf, FileLockState>> = RefCell::new(FxHashMap::default());
+    static LOCKS: RefCell<FxHashMap<PathBuf, LockState>> = RefCell::new(FxHashMap::default());
     static NEXT_ID: RefCell<u64> = const { RefCell::new(0) };
 }
 
 #[derive(Default)]
-struct FileLockState {
+struct LockState {
+    /// Cached SyncAccessHandle (always opened in Readwrite mode).
     handle: Option<FileSystemSyncAccessHandle>,
-    mode: Option<SyncAccessMode>,
-    // Records how many tasks are currently using this handle.
-    active_count: usize,
-    waiters: VecDeque<WaitTask>,
+    /// Number of active `File` objects sharing this handle.
+    ref_count: usize,
+    /// Tasks waiting for the handle to become available.
+    waiters: VecDeque<Waiter>,
 }
 
-struct WaitTask {
+struct Waiter {
     id: u64,
-    mode: SyncAccessMode,
     waker: Waker,
 }
+
+// -- Guard ------------------------------------------------------------------
 
 #[derive(Debug)]
 pub struct FileLockGuard {
@@ -47,139 +62,123 @@ impl Drop for FileLockGuard {
     fn drop(&mut self) {
         LOCKS.with(|locks| {
             let mut locks = locks.borrow_mut();
-            if let Some(state) = locks.get_mut(&self.path) {
-                state.active_count -= 1;
+            let Some(state) = locks.get_mut(&self.path) else {
+                return;
+            };
 
-                if state.active_count == 0 {
-                    let should_close = match state.waiters.front() {
-                        Some(next) => {
-                            // If we have a Readwrite handle, it can satisfy any subsequent request.
-                            // If we have a Readonly handle, only Readonly requests can be satisfied.
-                            !matches!(
-                                (state.mode, next.mode),
-                                (Some(SyncAccessMode::Readwrite), _)
-                                    | (Some(SyncAccessMode::Readonly), SyncAccessMode::Readonly)
-                            )
-                        }
-                        None => true,
-                    };
+            state.ref_count -= 1;
 
-                    if should_close {
-                        if let Some(h) = state.handle.take() {
-                            h.close();
-                        }
-                        state.mode = None;
-                    }
+            #[cfg(feature = "opfs_tracing")]
+            tracing::trace!(
+                path = %self.path.display(),
+                ref_count = state.ref_count,
+                "Released file lock"
+            );
+
+            if state.ref_count == 0 {
+                // Last user — close the cached handle.
+                if let Some(h) = state.handle.take() {
+                    h.close();
                 }
 
-                #[cfg(feature = "opfs_tracing")]
-                tracing::trace!(path = %self.path.display(), "Released file lock");
-
-                // Wake up the next waiter(s)
-                while let Some(next) = state.waiters.front() {
-                    let can_share = matches!(
-                        (state.mode, next.mode),
-                        (Some(SyncAccessMode::Readwrite), _)
-                            | (Some(SyncAccessMode::Readonly), SyncAccessMode::Readonly)
-                    );
-
-                    if state.active_count == 0 || can_share {
-                        if let Some(task) = state.waiters.pop_front() {
-                            task.waker.wake();
-                        }
-                        // If the lock is free and we woke the first waiter, stop waking more
-                        // and let the first one poll and set the new mode.
-                        if state.active_count == 0 && state.mode.is_none() {
-                            break;
-                        }
-                    } else {
-                        break;
-                    }
-                }
-
-                if state.active_count == 0 && state.waiters.is_empty() && state.handle.is_none() {
+                if state.waiters.is_empty() {
                     locks.remove(&self.path);
+                } else {
+                    // Wake all waiters. The first one to poll becomes the new
+                    // handle creator; the rest will wait for `set_lock_handle`.
+                    let wakers: Vec<Waker> = state.waiters.drain(..).map(|w| w.waker).collect();
+                    for w in wakers {
+                        w.wake();
+                    }
                 }
             }
         });
     }
 }
 
+// -- Future -----------------------------------------------------------------
+
 pub struct FileLockFuture {
     path: PathBuf,
     id: u64,
-    mode: SyncAccessMode,
+    /// Whether this future has inserted itself into the waiter queue.
+    registered: bool,
+}
+
+impl Drop for FileLockFuture {
+    fn drop(&mut self) {
+        if !self.registered {
+            return;
+        }
+        // Clean up the waiter entry if this future is cancelled.
+        LOCKS.with(|locks| {
+            let mut locks = locks.borrow_mut();
+            let Some(state) = locks.get_mut(&self.path) else {
+                return;
+            };
+            state.waiters.retain(|w| w.id != self.id);
+            if state.ref_count == 0 && state.waiters.is_empty() && state.handle.is_none() {
+                locks.remove(&self.path);
+            }
+        });
+    }
 }
 
 impl Future for FileLockFuture {
     type Output = (FileLockGuard, Option<FileSystemSyncAccessHandle>);
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let path = &self.path;
-        let id = self.id;
-        let requested_mode = self.mode;
+        let this = self.get_mut();
 
         LOCKS.with(|locks| {
             let mut locks = locks.borrow_mut();
-            let state = locks
-                .entry(path.clone())
-                .or_insert_with(FileLockState::default);
+            let state = locks.entry(this.path.clone()).or_default();
 
-            // Acquisition Rules:
-            // 1. Fresh acquisition: active_count == 0 AND (no waiters or we are at front)
-            // 2. Shared acquisition: mode matches AND no waiters of different mode are at the front
-            //    CRITICAL: If we are sharing, we MUST wait for the handle to be available (state.handle.is_some())
-            //              to avoid multiple tasks calling createSyncAccessHandle.
+            if state.ref_count == 0 {
+                // First opener — become the handle creator.
+                state.ref_count = 1;
+                state.waiters.retain(|w| w.id != this.id);
+                this.registered = false;
 
-            let is_front = state.waiters.front().is_none_or(|w| w.id == id);
+                #[cfg(feature = "opfs_tracing")]
+                tracing::trace!(path = %this.path.display(), "Acquired file lock (creator)");
 
-            let can_acquire = if state.active_count == 0 {
-                is_front
-            } else {
-                match (state.mode, requested_mode) {
-                    // Readwrite handle can satisfy any request.
-                    (Some(SyncAccessMode::Readwrite), _) => state.handle.is_some(),
-                    // Readonly handle can only satisfy Readonly requests.
-                    (Some(SyncAccessMode::Readonly), SyncAccessMode::Readonly) => {
-                        state.handle.is_some()
-                    }
-                    // Otherwise (e.g. Readonly exists but Readwrite requested) must wait.
-                    _ => false,
-                }
-            };
-
-            if can_acquire {
-                state.active_count += 1;
-                state.mode = Some(requested_mode);
-                state.waiters.retain(|w| w.id != id);
+                Poll::Ready((
+                    FileLockGuard {
+                        path: this.path.clone(),
+                    },
+                    None,
+                ))
+            } else if let Some(handle) = &state.handle {
+                // Handle exists — share it.
+                let h = handle.clone();
+                state.ref_count += 1;
+                state.waiters.retain(|w| w.id != this.id);
+                this.registered = false;
 
                 #[cfg(feature = "opfs_tracing")]
                 tracing::trace!(
-                    path = %path.display(),
-                    id = id,
-                    mode = ?requested_mode,
-                    "Acquired file lock (count: {})",
-                    state.active_count
+                    path = %this.path.display(),
+                    ref_count = state.ref_count,
+                    "Acquired file lock (shared)"
                 );
 
                 Poll::Ready((
                     FileLockGuard {
-                        path: path.clone(),
+                        path: this.path.clone(),
                     },
-                    state.handle.clone(),
+                    Some(h),
                 ))
             } else {
-                // Update or push to waiters
-                if let Some(waiter) = state.waiters.iter_mut().find(|w| w.id == id) {
-                    waiter.waker = cx.waker().clone();
+                // Handle is being created by another opener — wait.
+                if let Some(w) = state.waiters.iter_mut().find(|w| w.id == this.id) {
+                    w.waker = cx.waker().clone();
                 } else {
-                    #[cfg(feature = "opfs_tracing")]
-                    tracing::trace!(path = %path.display(), id = id, "File lock busy/mode-mismatch, queuing");
-                    state.waiters.push_back(WaitTask {
-                        id,
-                        mode: requested_mode,
+                    state.waiters.push_back(Waiter {
+                        id: this.id,
                         waker: cx.waker().clone(),
                     });
+                    this.registered = true;
                 }
                 Poll::Pending
             }
@@ -187,28 +186,12 @@ impl Future for FileLockFuture {
     }
 }
 
-pub(crate) fn set_lock_handle(path: &Path, handle: FileSystemSyncAccessHandle) {
-    LOCKS.with(|locks| {
-        let mut locks = locks.borrow_mut();
-        if let Some(state) = locks.get_mut(path) {
-            state.handle = Some(handle);
+// -- Public API -------------------------------------------------------------
 
-            // Wake up ALL tasks that were waiting for this handle to be ready
-            // (tasks with same mode that couldn't 'acquire' yet)
-            let mut i = 0;
-            while i < state.waiters.len() {
-                if Some(state.waiters[i].mode) == state.mode {
-                    let task = state.waiters.remove(i).unwrap();
-                    task.waker.wake();
-                } else {
-                    i += 1;
-                }
-            }
-        }
-    });
-}
-
-pub fn lock_file(path: impl AsRef<Path>, mode: SyncAccessMode) -> FileLockFuture {
+/// Acquire a shared file lock. Returns a guard and optionally the cached
+/// `SyncAccessHandle`. When `None` is returned, the caller must create a
+/// new handle and register it via [`set_lock_handle`].
+pub fn lock_file(path: impl AsRef<Path>) -> FileLockFuture {
     let id = NEXT_ID.with(|next_id| {
         let mut id = next_id.borrow_mut();
         let current = *id;
@@ -219,8 +202,24 @@ pub fn lock_file(path: impl AsRef<Path>, mode: SyncAccessMode) -> FileLockFuture
     FileLockFuture {
         path: path.as_ref().to_path_buf(),
         id,
-        mode,
+        registered: false,
     }
+}
+
+/// Store a newly created `SyncAccessHandle` in the cache and wake all
+/// waiters so they can share it.
+pub(crate) fn set_lock_handle(path: &Path, handle: FileSystemSyncAccessHandle) {
+    LOCKS.with(|locks| {
+        let mut locks = locks.borrow_mut();
+        if let Some(state) = locks.get_mut(path) {
+            state.handle = Some(handle);
+            // Wake ALL waiters — they can all share the handle now.
+            let wakers: Vec<Waker> = state.waiters.drain(..).map(|w| w.waker).collect();
+            for w in wakers {
+                w.wake();
+            }
+        }
+    });
 }
 
 /// A file handle with exclusive access to the underlying OPFS file.

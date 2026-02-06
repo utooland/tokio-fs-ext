@@ -31,13 +31,14 @@ pub(crate) async fn open_file(
     truncate: bool,
 ) -> io::Result<File> {
     let path = path.as_ref();
-    let (handle, _lock, cached_sync_handle) = get_fs_handle(path, create, mode).await?;
+    let (handle, _lock, cached_sync_handle) = get_fs_handle(path, create).await?;
 
     let sync_access_handle = if let Some(h) = cached_sync_handle {
         h
     } else {
-        let h = create_sync_access_handle(&handle, mode).await?;
-        // Store it in the global registry for future reuse if needed
+        // Always create in Readwrite mode so the handle can be shared with
+        // both readers and writers, matching OS filesystem semantics.
+        let h = create_sync_access_handle(&handle, SyncAccessMode::Readwrite).await?;
         set_lock_handle(path, h.clone());
         h
     };
@@ -68,19 +69,18 @@ pub(crate) async fn open_file(
 pub(crate) async fn get_fs_handle(
     path: impl AsRef<Path>,
     create: CreateFileMode,
-    mode: SyncAccessMode,
 ) -> io::Result<(
     FileSystemFileHandle,
     FileLockGuard,
     Option<FileSystemSyncAccessHandle>,
 )> {
     let path = path.as_ref();
-    let (lock, cached_handle) = lock_file(path, mode).await;
-    let handle = get_fs_handle_no_lock(path, create).await?;
+    let (lock, cached_handle) = lock_file(path).await;
+    let handle = resolve_file_handle(path, create).await?;
     Ok((handle, lock, cached_handle))
 }
 
-pub(crate) async fn get_fs_handle_no_lock(
+pub(crate) async fn resolve_file_handle(
     path: impl AsRef<Path>,
     create: CreateFileMode,
 ) -> io::Result<FileSystemFileHandle> {

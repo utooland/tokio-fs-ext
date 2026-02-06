@@ -4,8 +4,8 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::FileSystemRemoveOptions;
 
 use super::{
-    OpenDirType, SyncAccessMode, dir_handle_cache::remove_cached_dir_handle, get_fs_handle,
-    open_dir, opfs_err, options::CreateFileMode, root::root, virtualize,
+    OpenDirType, dir_handle_cache::remove_cached_dir_handle, open_dir, opfs_err, root::root,
+    virtualize,
 };
 
 #[cfg_attr(feature = "opfs_tracing", tracing::instrument(level = "trace", fields(path = %path.as_ref().to_string_lossy())))]
@@ -24,19 +24,6 @@ pub(crate) async fn remove(path: impl AsRef<Path>, recursive: bool) -> io::Resul
         Some(parent) => open_dir(parent, OpenDirType::NotCreate).await?,
         None => root().await?,
     };
-
-    // Only lock if it's potentially a file to avoid "Operation would block" errors with SyncAccessHandle.
-    //
-    // Potential risk:
-    // 1. Recursive removal: Removing a directory recursively does not acquire locks for its children.
-    //    If a file inside the directory is currently open with a SyncAccessHandle, the removal might
-    //    fail or leave the handle in an inconsistent state.
-    // 2. Race condition: The entry could change between `get_file_handle` and `remove_entry`.
-    let _lock =
-        match get_fs_handle(path, CreateFileMode::NotCreate, SyncAccessMode::Readwrite).await {
-            Ok((_, lock, _)) => Some(lock),
-            Err(_) => None,
-        };
 
     let options = FileSystemRemoveOptions::new();
     options.set_recursive(recursive);

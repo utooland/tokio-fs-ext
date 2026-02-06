@@ -370,7 +370,9 @@ async fn test_open_options_truncate() {
             .await
             .unwrap();
 
-        // With shared locking, opening Readonly while Readwrite is open should succeed
+        // With handle caching, opening Readonly while a Readwrite handle
+        // exists reuses the same underlying SyncAccessHandle, matching OS
+        // semantics where multiple File objects can coexist on one path.
         let shared_read = OpenOptions::new().read(true).open(path).await;
         assert!(shared_read.is_ok());
     };
