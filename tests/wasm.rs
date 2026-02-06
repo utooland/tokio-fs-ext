@@ -584,6 +584,7 @@ async fn test_watch_dir_stream() {
             let event = stream.next().await.expect("Should receive an event");
             assert!(!event.paths.is_empty());
             assert!(event.paths[0].to_str().unwrap().contains("test.txt"));
+            assert!(event.kind.is_create());
         }
         Err(e) => {
             let err_msg = e.to_string();
@@ -615,6 +616,7 @@ async fn test_watch_file_stream() {
             // Wait for the event
             let event = stream.next().await.expect("Should receive an event");
             assert!(!event.paths.is_empty());
+            assert!(event.kind.is_modify());
         }
         Err(e) => {
             let err_msg = e.to_string();
@@ -627,4 +629,72 @@ async fn test_watch_file_stream() {
     }
 
     let _ = remove_file(path).await;
+}
+
+#[cfg(feature = "opfs_watch")]
+#[wasm_bindgen_test]
+async fn test_watch_remove_event() {
+    use futures::StreamExt;
+    let base_path = "/test_watch_remove";
+    let _ = remove_dir_all(base_path).await;
+    create_dir(base_path).await.unwrap();
+    let file_path = format!("{}/remove_me.txt", base_path);
+    write(&file_path, "bye").await.unwrap();
+
+    let stream_res = watch_dir(base_path, false).await;
+    match stream_res {
+        Ok(mut stream) => {
+            // Remove the file
+            remove_file(&file_path).await.unwrap();
+
+            let event = stream.next().await.expect("Should receive an event");
+            assert!(event.kind.is_remove());
+        }
+        Err(e) => {
+            let err_msg = e.to_string();
+            if err_msg.contains("FileSystemObserver") || err_msg.contains("not a function") {
+                return;
+            }
+            panic!("watch_dir failed: {:?}", e);
+        }
+    }
+
+    let _ = remove_dir_all(base_path).await;
+}
+
+#[cfg(feature = "opfs_watch")]
+#[wasm_bindgen_test]
+async fn test_watch_rename_event() {
+    use futures::StreamExt;
+    let base_path = "/test_watch_rename";
+    let _ = remove_dir_all(base_path).await;
+    create_dir(base_path).await.unwrap();
+    let old_path = format!("{}/old.txt", base_path);
+    let new_path = format!("{}/new.txt", base_path);
+    write(&old_path, "move me").await.unwrap();
+
+    let stream_res = watch_dir(base_path, false).await;
+    match stream_res {
+        Ok(mut stream) => {
+            rename(&old_path, &new_path).await.unwrap();
+
+            let event = stream.next().await.expect("Should receive an event");
+            
+            // In some environments, 'rename' may be reported as 'moved' (Modify),
+            // in others as 'disappeared'/'appeared' (Remove/Create).
+            assert!(
+                event.kind.is_modify() || event.kind.is_remove() || event.kind.is_create(),
+                "Unexpected event kind for rename: {:?}", event.kind
+            );
+        }
+        Err(e) => {
+            let err_msg = e.to_string();
+            if err_msg.contains("FileSystemObserver") || err_msg.contains("not a function") {
+                return;
+            }
+            panic!("watch_dir failed: {:?}", e);
+        }
+    }
+
+    let _ = remove_dir_all(base_path).await;
 }
