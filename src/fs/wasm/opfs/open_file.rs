@@ -11,7 +11,10 @@ use web_sys::{
 use crate::current_dir;
 
 use super::{
-    super::File,
+    super::{
+        File,
+        file::{FileLockGuard, lock_file},
+    },
     OpenDirType,
     error::opfs_err,
     open_dir,
@@ -27,7 +30,8 @@ pub(crate) async fn open_file(
     mode: SyncAccessMode,
     truncate: bool,
 ) -> io::Result<File> {
-    let handle = get_fs_handle(&path, create).await?;
+    let path = path.as_ref();
+    let (handle, lock) = get_fs_handle(path, create).await?;
 
     let sync_access_handle = create_sync_access_handle(&handle, mode).await?;
 
@@ -49,10 +53,21 @@ pub(crate) async fn open_file(
         handle,
         sync_access_handle,
         pos: None,
+        _lock: lock,
     })
 }
 
-async fn get_fs_handle(
+pub(crate) async fn get_fs_handle(
+    path: impl AsRef<Path>,
+    create: CreateFileMode,
+) -> io::Result<(FileSystemFileHandle, FileLockGuard)> {
+    let path = path.as_ref();
+    let lock = lock_file(path).await;
+    let handle = get_fs_handle_no_lock(path, create).await?;
+    Ok((handle, lock))
+}
+
+pub(crate) async fn get_fs_handle_no_lock(
     path: impl AsRef<Path>,
     create: CreateFileMode,
 ) -> io::Result<FileSystemFileHandle> {

@@ -106,11 +106,16 @@ impl OpenOptions {
 impl OpenOptions {
     fn is_invalid(&self) -> bool {
         // Must have at least one of read, write, or append
-        if !self.0.intersects(Flags::READ | Flags::WRITE | Flags::APPEND) {
+        if !self
+            .0
+            .intersects(Flags::READ | Flags::WRITE | Flags::APPEND)
+        {
             return true;
         }
 
-        if self.0.intersects(Flags::CREATE | Flags::CREATE_NEW | Flags::TRUNCATE)
+        if self
+            .0
+            .intersects(Flags::CREATE | Flags::CREATE_NEW | Flags::TRUNCATE)
             && !self.0.intersects(Flags::WRITE | Flags::APPEND)
         {
             return true;

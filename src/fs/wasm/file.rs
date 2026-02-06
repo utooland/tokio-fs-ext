@@ -1,20 +1,119 @@
 use std::{
+    cell::RefCell,
+    collections::VecDeque,
+    future::Future,
     io::{self, SeekFrom},
-    path::Path,
+    path::{Path, PathBuf},
     pin::Pin,
-    task::{Context, Poll},
+    task::{Context, Poll, Waker},
 };
 
 use futures::io::{AsyncRead, AsyncSeek, AsyncWrite};
-use web_sys::{
-    FileSystemFileHandle, FileSystemReadWriteOptions, FileSystemSyncAccessHandle,
-};
+use rustc_hash::FxHashMap;
+use web_sys::{FileSystemFileHandle, FileSystemReadWriteOptions, FileSystemSyncAccessHandle};
 
 use super::{
     OpenOptions,
     metadata::{FileType, Metadata},
     opfs::{SyncAccessMode, open_file, opfs_err},
 };
+
+thread_local! {
+    static LOCKS: RefCell<FxHashMap<PathBuf, FileLockState>> = RefCell::new(FxHashMap::default());
+    static NEXT_ID: RefCell<u64> = const { RefCell::new(0) };
+}
+
+#[derive(Default)]
+struct FileLockState {
+    owner: Option<u64>,
+    waiters: VecDeque<(u64, Waker)>,
+}
+
+#[derive(Debug)]
+pub struct FileLockGuard {
+    path: PathBuf,
+    id: u64,
+}
+
+impl Drop for FileLockGuard {
+    fn drop(&mut self) {
+        LOCKS.with(|locks| {
+            let mut locks = locks.borrow_mut();
+            if let Some(state) = locks.get_mut(&self.path) {
+                state.owner = None;
+                #[cfg(feature = "opfs_tracing")]
+                tracing::trace!(path = %self.path.display(), id = self.id, "Released file lock");
+
+                if let Some((_, waker)) = state.waiters.front() {
+                    waker.wake_by_ref();
+                } else {
+                    locks.remove(&self.path);
+                }
+            }
+        });
+    }
+}
+
+pub struct FileLockFuture {
+    path: PathBuf,
+    id: u64,
+}
+
+impl Future for FileLockFuture {
+    type Output = FileLockGuard;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let path = &self.path;
+        let id = self.id;
+        LOCKS.with(|locks| {
+            let mut locks = locks.borrow_mut();
+            let state = locks
+                .entry(path.clone())
+                .or_insert_with(FileLockState::default);
+
+            if state.owner.is_none() && state.waiters.front().is_none_or(|(w_id, _)| *w_id == id) {
+                // Front of the queue and lock is free (or we were the one waiting)
+                state.owner = Some(id);
+                state.waiters.retain(|(w_id, _)| *w_id != id);
+
+                #[cfg(feature = "opfs_tracing")]
+                tracing::trace!(path = %path.display(), id = id, "Acquired file lock");
+
+                Poll::Ready(FileLockGuard {
+                    path: path.clone(),
+                    id,
+                })
+            } else {
+                // Not our turn or locked
+                if !state.waiters.iter().any(|(w_id, _)| *w_id == id) {
+                    #[cfg(feature = "opfs_tracing")]
+                    tracing::trace!(path = %path.display(), id = id, "File lock busy, queuing");
+                    state.waiters.push_back((id, cx.waker().clone()));
+                } else {
+                    // Update waker if already in queue
+                    if let Some(waiter) = state.waiters.iter_mut().find(|(w_id, _)| *w_id == id) {
+                        waiter.1 = cx.waker().clone();
+                    }
+                }
+                Poll::Pending
+            }
+        })
+    }
+}
+
+pub fn lock_file(path: impl AsRef<Path>) -> FileLockFuture {
+    let id = NEXT_ID.with(|next_id| {
+        let mut id = next_id.borrow_mut();
+        let current = *id;
+        *id += 1;
+        current
+    });
+
+    FileLockFuture {
+        path: path.as_ref().to_path_buf(),
+        id,
+    }
+}
 
 /// A file handle with exclusive access to the underlying OPFS file.
 ///
@@ -24,6 +123,7 @@ pub struct File {
     pub(super) handle: FileSystemFileHandle,
     pub(super) sync_access_handle: FileSystemSyncAccessHandle,
     pub(super) pos: Option<u64>,
+    pub(super) _lock: FileLockGuard,
 }
 
 impl File {
