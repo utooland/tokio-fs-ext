@@ -564,3 +564,67 @@ async fn test_current_dir() {
 
     let _ = remove_dir_all(deep_dir).await;
 }
+
+#[cfg(feature = "opfs_watch")]
+#[wasm_bindgen_test]
+async fn test_watch_dir_stream() {
+    use futures::StreamExt;
+    let base_path = "/test_watch_dir_stream";
+    let _ = remove_dir_all(base_path).await;
+    create_dir(base_path).await.unwrap();
+
+    let stream_res = watch_dir(base_path, true).await;
+    match stream_res {
+        Ok(mut stream) => {
+            // Create a file to trigger an event
+            let file_path = format!("{}/test.txt", base_path);
+            write(&file_path, "hello").await.unwrap();
+
+            // Wait for the event
+            let event = stream.next().await.expect("Should receive an event");
+            assert!(!event.paths.is_empty());
+            assert!(event.paths[0].to_str().unwrap().contains("test.txt"));
+        }
+        Err(e) => {
+            let err_msg = e.to_string();
+            if err_msg.contains("FileSystemObserver") || err_msg.contains("not a function") {
+                // Skip if not supported in current environment
+                return;
+            }
+            panic!("watch_dir failed: {:?}", e);
+        }
+    }
+
+    let _ = remove_dir_all(base_path).await;
+}
+
+#[cfg(feature = "opfs_watch")]
+#[wasm_bindgen_test]
+async fn test_watch_file_stream() {
+    use futures::StreamExt;
+    let path = "/test_watch_file_stream.txt";
+    let _ = remove_file(path).await;
+    write(path, "initial").await.unwrap();
+
+    let stream_res = watch_file(path).await;
+    match stream_res {
+        Ok(mut stream) => {
+            // Modify the file
+            write(path, "updated").await.unwrap();
+
+            // Wait for the event
+            let event = stream.next().await.expect("Should receive an event");
+            assert!(!event.paths.is_empty());
+        }
+        Err(e) => {
+            let err_msg = e.to_string();
+            if err_msg.contains("FileSystemObserver") || err_msg.contains("not a function") {
+                // Skip if not supported in current environment
+                return;
+            }
+            panic!("watch_file failed: {:?}", e);
+        }
+    }
+
+    let _ = remove_file(path).await;
+}
