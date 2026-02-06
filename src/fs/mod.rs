@@ -22,7 +22,7 @@ cfg_if! {
         pub use wasm::offload;
 
         #[cfg(feature = "opfs_watch")]
-        pub use wasm::watch;
+        pub use wasm::{WatchStream, watch_dir, watch_file};
 
     } else if #[cfg(any(target_family = "unix", target_family = "windows"))] {
 

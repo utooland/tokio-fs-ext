@@ -13,7 +13,7 @@ use wasm_bindgen::{
     prelude::{Closure, wasm_bindgen},
 };
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{FileSystemDirectoryHandle, FileSystemHandle, FileSystemHandleKind};
+use web_sys::{FileSystemHandle, FileSystemHandleKind};
 
 use super::{
     super::opfs::{opfs_err, virtualize},
@@ -177,7 +177,7 @@ impl WatchStream {
 impl Stream for WatchStream {
     type Item = event::Event;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if let Some(ref mut receiver) = self.get_mut().receiver {
             receiver.poll_recv(cx)
         } else {
