@@ -13,7 +13,7 @@ use crate::current_dir;
 use super::{
     super::{
         File,
-        file::{FileLockGuard, lock_file},
+        file::{FileLockGuard, lock_file, set_lock_handle},
     },
     OpenDirType,
     error::opfs_err,
@@ -31,9 +31,16 @@ pub(crate) async fn open_file(
     truncate: bool,
 ) -> io::Result<File> {
     let path = path.as_ref();
-    let (handle, lock) = get_fs_handle(path, create).await?;
+    let (handle, _lock, cached_sync_handle) = get_fs_handle(path, create, mode).await?;
 
-    let sync_access_handle = create_sync_access_handle(&handle, mode).await?;
+    let sync_access_handle = if let Some(h) = cached_sync_handle {
+        h
+    } else {
+        let h = create_sync_access_handle(&handle, mode).await?;
+        // Store it in the global registry for future reuse if needed
+        set_lock_handle(path, h.clone());
+        h
+    };
 
     if truncate {
         sync_access_handle.truncate_with_u32(0).map_or_else(
@@ -52,19 +59,24 @@ pub(crate) async fn open_file(
     Ok(File {
         handle,
         sync_access_handle,
-        pos: None,
-        _lock: lock,
+        pos: Some(0),
+        _lock,
     })
 }
 
 pub(crate) async fn get_fs_handle(
     path: impl AsRef<Path>,
     create: CreateFileMode,
-) -> io::Result<(FileSystemFileHandle, FileLockGuard)> {
+    mode: SyncAccessMode,
+) -> io::Result<(
+    FileSystemFileHandle,
+    FileLockGuard,
+    Option<FileSystemSyncAccessHandle>,
+)> {
     let path = path.as_ref();
-    let lock = lock_file(path).await;
+    let (lock, cached_handle) = lock_file(path, mode).await;
     let handle = get_fs_handle_no_lock(path, create).await?;
-    Ok((handle, lock))
+    Ok((handle, lock, cached_handle))
 }
 
 pub(crate) async fn get_fs_handle_no_lock(

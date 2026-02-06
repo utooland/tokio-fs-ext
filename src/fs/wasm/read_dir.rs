@@ -123,6 +123,6 @@ impl DirEntry {
     }
 
     pub async fn metadata(&self) -> io::Result<Metadata> {
-        todo!()
+        super::metadata(&self.path).await
     }
 }

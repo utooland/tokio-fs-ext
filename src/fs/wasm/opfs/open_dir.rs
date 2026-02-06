@@ -42,17 +42,19 @@ pub(crate) async fn open_dir(
     let mut found = 0_usize;
 
     let mut cur_virt = PathBuf::from("/");
-    for c in components.iter() {
+    for (i, c) in components.iter().enumerate() {
         cur_virt = cur_virt.join(c.as_ref());
         dir_handle = if let Some(handle) = get_cached_dir_handle(&cur_virt) {
             handle
         } else {
-            let dir_handle = get_dir_handle(
-                &dir_handle,
-                c,
-                matches!(r#type, OpenDirType::Create | OpenDirType::CreateRecursive),
-            )
-            .await?;
+            let is_last = i == total_depth - 1;
+            let create = match r#type {
+                OpenDirType::Create => is_last,
+                OpenDirType::CreateRecursive => true,
+                _ => false,
+            };
+
+            let dir_handle = get_dir_handle(&dir_handle, c, create).await?;
 
             set_cached_dir_handle(cur_virt.clone(), dir_handle.clone());
             dir_handle

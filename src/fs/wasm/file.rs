@@ -25,14 +25,22 @@ thread_local! {
 
 #[derive(Default)]
 struct FileLockState {
-    owner: Option<u64>,
-    waiters: VecDeque<(u64, Waker)>,
+    handle: Option<FileSystemSyncAccessHandle>,
+    mode: Option<SyncAccessMode>,
+    // Records how many tasks are currently using this handle.
+    active_count: usize,
+    waiters: VecDeque<WaitTask>,
+}
+
+struct WaitTask {
+    id: u64,
+    mode: SyncAccessMode,
+    waker: Waker,
 }
 
 #[derive(Debug)]
 pub struct FileLockGuard {
-    path: PathBuf,
-    id: u64,
+    pub(super) path: PathBuf,
 }
 
 impl Drop for FileLockGuard {
@@ -40,13 +48,44 @@ impl Drop for FileLockGuard {
         LOCKS.with(|locks| {
             let mut locks = locks.borrow_mut();
             if let Some(state) = locks.get_mut(&self.path) {
-                state.owner = None;
-                #[cfg(feature = "opfs_tracing")]
-                tracing::trace!(path = %self.path.display(), id = self.id, "Released file lock");
+                state.active_count -= 1;
 
-                if let Some((_, waker)) = state.waiters.front() {
-                    waker.wake_by_ref();
-                } else {
+                if state.active_count == 0 {
+                    let should_close = match state.waiters.front() {
+                        Some(next) => Some(next.mode) != state.mode,
+                        None => true,
+                    };
+
+                    if should_close {
+                        if let Some(h) = state.handle.take() {
+                            h.close();
+                        }
+                        state.mode = None;
+                    }
+                }
+
+                #[cfg(feature = "opfs_tracing")]
+                tracing::trace!(path = %self.path.display(), "Released file lock");
+
+                // Wake up the next waiter(s)
+                while let Some(next) = state.waiters.front() {
+                    // If lock is free, wake the first one in line (could be any mode)
+                    // If lock is shared, wake all matching mode waiters at the front
+                    if state.active_count == 0 || Some(next.mode) == state.mode {
+                        if let Some(task) = state.waiters.pop_front() {
+                            task.waker.wake();
+                        }
+                        // If it was the first acquisition, we stop and wait for it to poll
+                        // and potentially set a mode.
+                        if state.active_count == 0 && state.mode.is_none() {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+
+                if state.active_count == 0 && state.waiters.is_empty() && state.handle.is_none() {
                     locks.remove(&self.path);
                 }
             }
@@ -57,43 +96,73 @@ impl Drop for FileLockGuard {
 pub struct FileLockFuture {
     path: PathBuf,
     id: u64,
+    mode: SyncAccessMode,
 }
 
 impl Future for FileLockFuture {
-    type Output = FileLockGuard;
+    type Output = (FileLockGuard, Option<FileSystemSyncAccessHandle>);
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let path = &self.path;
         let id = self.id;
+        let requested_mode = self.mode;
+
         LOCKS.with(|locks| {
             let mut locks = locks.borrow_mut();
             let state = locks
                 .entry(path.clone())
                 .or_insert_with(FileLockState::default);
 
-            if state.owner.is_none() && state.waiters.front().is_none_or(|(w_id, _)| *w_id == id) {
-                // Front of the queue and lock is free (or we were the one waiting)
-                state.owner = Some(id);
-                state.waiters.retain(|(w_id, _)| *w_id != id);
+            // Acquisition Rules:
+            // 1. Fresh acquisition: active_count == 0 AND (no waiters or we are at front)
+            // 2. Shared acquisition: mode matches AND no waiters of different mode are at the front
+            //    CRITICAL: If we are sharing, we MUST wait for the handle to be available (state.handle.is_some())
+            //              to avoid multiple tasks calling createSyncAccessHandle.
+
+            let is_front = state.waiters.front().is_none_or(|w| w.id == id);
+
+            let can_acquire = if state.active_count == 0 {
+                is_front
+            } else if Some(requested_mode) == state.mode {
+                // If the handle isn't ready yet (it's being opened by another task), 
+                // we must wait in the waiter list.
+                is_front && state.handle.is_some()
+            } else {
+                false
+            };
+
+            if can_acquire {
+                state.active_count += 1;
+                state.mode = Some(requested_mode);
+                state.waiters.retain(|w| w.id != id);
 
                 #[cfg(feature = "opfs_tracing")]
-                tracing::trace!(path = %path.display(), id = id, "Acquired file lock");
+                tracing::trace!(
+                    path = %path.display(),
+                    id = id,
+                    mode = ?requested_mode,
+                    "Acquired file lock (count: {})",
+                    state.active_count
+                );
 
-                Poll::Ready(FileLockGuard {
-                    path: path.clone(),
-                    id,
-                })
+                Poll::Ready((
+                    FileLockGuard {
+                        path: path.clone(),
+                    },
+                    state.handle.clone(),
+                ))
             } else {
-                // Not our turn or locked
-                if !state.waiters.iter().any(|(w_id, _)| *w_id == id) {
-                    #[cfg(feature = "opfs_tracing")]
-                    tracing::trace!(path = %path.display(), id = id, "File lock busy, queuing");
-                    state.waiters.push_back((id, cx.waker().clone()));
+                // Update or push to waiters
+                if let Some(waiter) = state.waiters.iter_mut().find(|w| w.id == id) {
+                    waiter.waker = cx.waker().clone();
                 } else {
-                    // Update waker if already in queue
-                    if let Some(waiter) = state.waiters.iter_mut().find(|(w_id, _)| *w_id == id) {
-                        waiter.1 = cx.waker().clone();
-                    }
+                    #[cfg(feature = "opfs_tracing")]
+                    tracing::trace!(path = %path.display(), id = id, "File lock busy/mode-mismatch, queuing");
+                    state.waiters.push_back(WaitTask {
+                        id,
+                        mode: requested_mode,
+                        waker: cx.waker().clone(),
+                    });
                 }
                 Poll::Pending
             }
@@ -101,7 +170,28 @@ impl Future for FileLockFuture {
     }
 }
 
-pub fn lock_file(path: impl AsRef<Path>) -> FileLockFuture {
+pub(crate) fn set_lock_handle(path: &Path, handle: FileSystemSyncAccessHandle) {
+    LOCKS.with(|locks| {
+        let mut locks = locks.borrow_mut();
+        if let Some(state) = locks.get_mut(path) {
+            state.handle = Some(handle);
+
+            // Wake up ALL tasks that were waiting for this handle to be ready
+            // (tasks with same mode that couldn't 'acquire' yet)
+            let mut i = 0;
+            while i < state.waiters.len() {
+                if Some(state.waiters[i].mode) == state.mode {
+                    let task = state.waiters.remove(i).unwrap();
+                    task.waker.wake();
+                } else {
+                    i += 1;
+                }
+            }
+        }
+    });
+}
+
+pub fn lock_file(path: impl AsRef<Path>, mode: SyncAccessMode) -> FileLockFuture {
     let id = NEXT_ID.with(|next_id| {
         let mut id = next_id.borrow_mut();
         let current = *id;
@@ -112,6 +202,7 @@ pub fn lock_file(path: impl AsRef<Path>) -> FileLockFuture {
     FileLockFuture {
         path: path.as_ref().to_path_buf(),
         id,
+        mode,
     }
 }
 
