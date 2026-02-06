@@ -1,9 +1,7 @@
 use std::{io, path::PathBuf};
 
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::oneshot;
 
-#[cfg(feature = "opfs_watch")]
-use super::super::opfs::watch::event;
 use super::{FsOffload, Metadata, ReadDir};
 
 pub enum FsTask {

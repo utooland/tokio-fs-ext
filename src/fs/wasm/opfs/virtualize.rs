@@ -36,6 +36,6 @@ pub(crate) fn virtualize(path: impl AsRef<Path>) -> Result<PathBuf, io::Error> {
     if !out.is_empty() {
         Ok(out.iter().collect())
     } else {
-        Ok(PathBuf::from("."))
+        Ok(PathBuf::from("/"))
     }
 }

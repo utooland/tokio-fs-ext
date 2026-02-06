@@ -679,12 +679,13 @@ async fn test_watch_rename_event() {
             rename(&old_path, &new_path).await.unwrap();
 
             let event = stream.next().await.expect("Should receive an event");
-            
+
             // In some environments, 'rename' may be reported as 'moved' (Modify),
             // in others as 'disappeared'/'appeared' (Remove/Create).
             assert!(
                 event.kind.is_modify() || event.kind.is_remove() || event.kind.is_create(),
-                "Unexpected event kind for rename: {:?}", event.kind
+                "Unexpected event kind for rename: {:?}",
+                event.kind
             );
         }
         Err(e) => {

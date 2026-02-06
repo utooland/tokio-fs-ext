@@ -9,7 +9,7 @@ use super::{
 };
 
 bitflags! {
-    #[derive(Clone , Debug, Copy)]
+    #[derive(Clone, Debug, Copy)]
     struct Flags: u8 {
         const READ = 1 << 0;
         const WRITE= 1 << 1;
@@ -47,7 +47,7 @@ impl OpenOptions {
         if write {
             self.0 |= Flags::WRITE;
         } else {
-            self.0.remove(Flags::WRITE)
+            self.0.remove(Flags::WRITE);
         }
         self
     }
@@ -56,7 +56,7 @@ impl OpenOptions {
         if append {
             self.0 |= Flags::APPEND;
         } else {
-            self.0.remove(Flags::APPEND)
+            self.0.remove(Flags::APPEND);
         }
         self
     }

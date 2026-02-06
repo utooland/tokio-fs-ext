@@ -39,8 +39,6 @@ pub(crate) async fn open_dir(
 
     let mut dir_handle = root().await?;
 
-    let mut found = 0_usize;
-
     let mut cur_virt = PathBuf::from("/");
     for (i, c) in components.iter().enumerate() {
         cur_virt = cur_virt.join(c.as_ref());
@@ -59,12 +57,6 @@ pub(crate) async fn open_dir(
             set_cached_dir_handle(cur_virt.clone(), dir_handle.clone());
             dir_handle
         };
-
-        found += 1;
-    }
-
-    if found != total_depth {
-        return Err(io::Error::from(io::ErrorKind::NotFound));
     }
 
     Ok(dir_handle)

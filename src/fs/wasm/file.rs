@@ -77,11 +77,11 @@ impl Drop for FileLockGuard {
 
                 // Wake up the next waiter(s)
                 while let Some(next) = state.waiters.front() {
-                    let can_share = match (state.mode, next.mode) {
-                        (Some(SyncAccessMode::Readwrite), _) => true,
-                        (Some(SyncAccessMode::Readonly), SyncAccessMode::Readonly) => true,
-                        _ => false,
-                    };
+                    let can_share = matches!(
+                        (state.mode, next.mode),
+                        (Some(SyncAccessMode::Readwrite), _)
+                            | (Some(SyncAccessMode::Readonly), SyncAccessMode::Readonly)
+                    );
 
                     if state.active_count == 0 || can_share {
                         if let Some(task) = state.waiters.pop_front() {
@@ -240,7 +240,7 @@ impl File {
         open_file(
             path,
             super::opfs::CreateFileMode::Create,
-            SyncAccessMode::Readonly,
+            SyncAccessMode::Readwrite,
             true,
         )
         .await
@@ -250,7 +250,7 @@ impl File {
         open_file(
             &path,
             super::opfs::CreateFileMode::CreateNew,
-            SyncAccessMode::Readonly,
+            SyncAccessMode::Readwrite,
             false,
         )
         .await
