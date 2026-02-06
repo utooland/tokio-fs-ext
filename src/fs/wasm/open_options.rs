@@ -136,7 +136,7 @@ impl From<&OpenOptions> for CreateFileMode {
 impl From<&OpenOptions> for SyncAccessMode {
     fn from(options: &OpenOptions) -> Self {
         if options.0.contains(Flags::WRITE) {
-            SyncAccessMode::ReadwriteUnsafe
+            SyncAccessMode::Readwrite
         } else {
             SyncAccessMode::Readonly
         }

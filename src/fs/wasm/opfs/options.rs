@@ -5,8 +5,6 @@ use wasm_bindgen::prelude::wasm_bindgen;
 pub enum SyncAccessMode {
     Readonly = "read-only",
     Readwrite = "readwrite",
-    // https://developer.mozilla.org/en-US/docs/Web/API/FileSystemFileHandle/createSyncAccessHandle#readwrite-unsafe
-    ReadwriteUnsafe = "readwrite-unsafe",
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
