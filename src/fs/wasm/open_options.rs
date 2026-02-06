@@ -22,7 +22,7 @@ bitflags! {
 
 impl Default for Flags {
     fn default() -> Self {
-        Flags::READ
+        Flags::empty()
     }
 }
 
@@ -31,7 +31,7 @@ pub struct OpenOptions(Flags);
 
 impl OpenOptions {
     pub fn new() -> OpenOptions {
-        OpenOptions(Flags::READ)
+        OpenOptions(Flags::empty())
     }
 
     pub fn read(&mut self, read: bool) -> &mut OpenOptions {
@@ -105,13 +105,22 @@ impl OpenOptions {
 
 impl OpenOptions {
     fn is_invalid(&self) -> bool {
-        self.0
-            .contains(Flags::CREATE | Flags::CREATE_NEW | Flags::TRUNCATE | Flags::APPEND)
-            && !self.0.contains(Flags::WRITE)
+        // Must have at least one of read, write, or append
+        if !self.0.intersects(Flags::READ | Flags::WRITE | Flags::APPEND) {
+            return true;
+        }
+
+        if self.0.intersects(Flags::CREATE | Flags::CREATE_NEW | Flags::TRUNCATE)
+            && !self.0.intersects(Flags::WRITE | Flags::APPEND)
+        {
+            return true;
+        }
+
+        false
     }
 
     fn is_truncate(&self) -> bool {
-        self.0.contains(Flags::TRUNCATE | Flags::CREATE)
+        self.0.contains(Flags::TRUNCATE)
     }
 }
 
@@ -123,10 +132,10 @@ impl Default for OpenOptions {
 
 impl From<&OpenOptions> for CreateFileMode {
     fn from(options: &OpenOptions) -> Self {
-        if options.0.contains(Flags::CREATE) {
-            CreateFileMode::Create
-        } else if options.0.contains(Flags::CREATE_NEW) {
+        if options.0.contains(Flags::CREATE_NEW) {
             CreateFileMode::CreateNew
+        } else if options.0.contains(Flags::CREATE) {
+            CreateFileMode::Create
         } else {
             CreateFileMode::NotCreate
         }
@@ -135,7 +144,7 @@ impl From<&OpenOptions> for CreateFileMode {
 
 impl From<&OpenOptions> for SyncAccessMode {
     fn from(options: &OpenOptions) -> Self {
-        if options.0.contains(Flags::WRITE) {
+        if options.0.intersects(Flags::WRITE | Flags::APPEND) {
             SyncAccessMode::Readwrite
         } else {
             SyncAccessMode::Readonly
