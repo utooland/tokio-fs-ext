@@ -75,16 +75,22 @@ impl Client {
         &self,
         path: impl AsRef<Path>,
         recursive: bool,
-        cb: impl Fn(event::Event) + Send + Sync + 'static,
-    ) -> io::Result<()> {
+    ) -> io::Result<super::EventStream> {
         let path = path.as_ref().into();
         self.dispatch(|sender| FsTask::WatchDir {
-            path,
-            recursive,
-            cb: Box::new(cb),
-            sender,
+            path, recursive, sender
         })
         .await
+    }
+
+    #[cfg(feature = "opfs_watch")]
+    pub async fn watch_file(
+        &self,
+        path: impl AsRef<Path>,
+    ) -> io::Result<super::EventStream> {
+        let path = path.as_ref().into();
+        self.dispatch(|sender| FsTask::WatchFile { path, sender })
+            .await
     }
 
     async fn dispatch<T, F>(&self, create_task: F) -> io::Result<T>
