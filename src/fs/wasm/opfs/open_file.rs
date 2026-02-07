@@ -44,18 +44,14 @@ pub(crate) async fn open_file(
     };
 
     if truncate {
-        sync_access_handle.truncate_with_u32(0).map_or_else(
-            |err| {
-                sync_access_handle.close();
-                Err(opfs_err(err))
-            },
-            |_| {
-                sync_access_handle.flush().map_err(|err| {
-                    sync_access_handle.close();
-                    opfs_err(err)
-                })
-            },
-        )?;
+        sync_access_handle
+            .truncate_with_u32(0)
+            .map_err(opfs_err)?;
+        sync_access_handle.flush().map_err(opfs_err)?;
+        // On error the `_lock` guard is dropped, which decrements
+        // ref_count and closes the cached handle when it reaches 0.
+        // We must NOT close the SyncAccessHandle here because other
+        // `File` objects may already be sharing it.
     }
     Ok(File {
         handle,

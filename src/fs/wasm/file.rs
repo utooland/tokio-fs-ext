@@ -12,6 +12,8 @@ use futures::io::{AsyncRead, AsyncSeek, AsyncWrite};
 use rustc_hash::FxHashMap;
 use web_sys::{FileSystemFileHandle, FileSystemReadWriteOptions, FileSystemSyncAccessHandle};
 
+use crate::console;
+
 use super::{
     OpenOptions,
     metadata::{FileType, Metadata},
@@ -72,6 +74,16 @@ impl Drop for FileLockGuard {
                 // Last user — close the cached handle.
                 if let Some(h) = state.handle.take() {
                     h.close();
+                } else if !state.waiters.is_empty() {
+                    // Deadlock risk: the lock creator dropped without ever
+                    // calling `set_lock_handle`.  Waiters will retry, but if
+                    // the underlying error persists they may cycle forever.
+                    console::error!(
+                        "[tokio-fs-ext] potential deadlock: lock holder for {:?} dropped \
+                         without setting handle, {} waiter(s) will retry",
+                        self.path,
+                        state.waiters.len()
+                    );
                 }
 
                 if state.waiters.is_empty() {
@@ -154,9 +166,24 @@ impl Future for FileLockFuture {
                 ))
             } else {
                 // Handle is being created by another opener — wait.
+                //
+                // Deadlock risk: if the creator task is itself awaiting
+                // `lock_file` for the same path (re-entrant lock), neither
+                // side can make progress.  We cannot detect true re-entrancy
+                // from here, but a growing waiter queue with no handle is a
+                // strong signal.
                 if let Some(w) = state.waiters.iter_mut().find(|w| w.id == this.id) {
                     w.waker = cx.waker().clone();
                 } else {
+                    if !state.waiters.is_empty() {
+                        console::error!(
+                            "[tokio-fs-ext] potential deadlock: {} task(s) already waiting \
+                             for handle on {:?}, yet handle is still not set — possible \
+                             re-entrant lock or stuck creator",
+                            state.waiters.len(),
+                            this.path
+                        );
+                    }
                     state.waiters.push_back(Waiter {
                         id: this.id,
                         waker: cx.waker().clone(),
@@ -201,6 +228,19 @@ pub(crate) fn set_lock_handle(path: &Path, handle: FileSystemSyncAccessHandle) {
             for w in wakers {
                 w.wake();
             }
+        } else {
+            // Deadlock risk: the guard was already dropped (state cleaned up)
+            // before we could register the handle.  The SyncAccessHandle is
+            // now leaked — OPFS allows only one per file, so future openers
+            // will hang forever on `createSyncAccessHandle`.
+            console::error!(
+                "[tokio-fs-ext] potential deadlock: set_lock_handle called for {:?} \
+                 but lock state was already removed — SyncAccessHandle leaked, \
+                 future opens of this file may hang",
+                path
+            );
+            // Best-effort: close the orphaned handle to avoid OPFS-level deadlock.
+            handle.close();
         }
     });
 }
@@ -369,17 +409,12 @@ impl File {
     pub(super) fn flush(&self) -> io::Result<()> {
         self.sync_access_handle.flush().map_err(opfs_err)
     }
-
-    pub(crate) fn close(&self) {
-        self.sync_access_handle.close();
-    }
 }
 
-impl Drop for File {
-    fn drop(&mut self) {
-        self.close();
-    }
-}
+// NOTE: No manual Drop — closing the SyncAccessHandle is managed by
+// `FileLockGuard::drop` when the last `File` on this path is dropped.
+// Calling `.close()` here would invalidate the handle for all other
+// `File` objects sharing it.
 
 impl AsyncRead for File {
     fn poll_read(
@@ -414,7 +449,10 @@ impl AsyncWrite for File {
     }
 
     fn poll_close(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
-        self.close();
+        // Only flush — the underlying SyncAccessHandle is shared across
+        // multiple `File` objects and must not be closed until the last
+        // FileLockGuard is dropped.
+        self.flush()?;
         Poll::Ready(Ok(()))
     }
 }
