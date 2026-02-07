@@ -12,8 +12,6 @@ use futures::io::{AsyncRead, AsyncSeek, AsyncWrite};
 use rustc_hash::FxHashMap;
 use web_sys::{FileSystemFileHandle, FileSystemReadWriteOptions, FileSystemSyncAccessHandle};
 
-use crate::console;
-
 use super::{
     OpenOptions,
     metadata::{FileType, Metadata},
@@ -74,16 +72,6 @@ impl Drop for FileLockGuard {
                 // Last user — close the cached handle.
                 if let Some(h) = state.handle.take() {
                     h.close();
-                } else if !state.waiters.is_empty() {
-                    // Deadlock risk: the lock creator dropped without ever
-                    // calling `set_lock_handle`.  Waiters will retry, but if
-                    // the underlying error persists they may cycle forever.
-                    console::error!(
-                        "[tokio-fs-ext] potential deadlock: lock holder for {:?} dropped \
-                         without setting handle, {} waiter(s) will retry",
-                        self.path,
-                        state.waiters.len()
-                    );
                 }
 
                 if state.waiters.is_empty() {
@@ -175,15 +163,6 @@ impl Future for FileLockFuture {
                 if let Some(w) = state.waiters.iter_mut().find(|w| w.id == this.id) {
                     w.waker = cx.waker().clone();
                 } else {
-                    if !state.waiters.is_empty() {
-                        console::error!(
-                            "[tokio-fs-ext] potential deadlock: {} task(s) already waiting \
-                             for handle on {:?}, yet handle is still not set — possible \
-                             re-entrant lock or stuck creator",
-                            state.waiters.len(),
-                            this.path
-                        );
-                    }
                     state.waiters.push_back(Waiter {
                         id: this.id,
                         waker: cx.waker().clone(),
@@ -229,17 +208,8 @@ pub(crate) fn set_lock_handle(path: &Path, handle: FileSystemSyncAccessHandle) {
                 w.wake();
             }
         } else {
-            // Deadlock risk: the guard was already dropped (state cleaned up)
-            // before we could register the handle.  The SyncAccessHandle is
-            // now leaked — OPFS allows only one per file, so future openers
-            // will hang forever on `createSyncAccessHandle`.
-            console::error!(
-                "[tokio-fs-ext] potential deadlock: set_lock_handle called for {:?} \
-                 but lock state was already removed — SyncAccessHandle leaked, \
-                 future opens of this file may hang",
-                path
-            );
-            // Best-effort: close the orphaned handle to avoid OPFS-level deadlock.
+            // Guard was already dropped — close the orphaned handle to avoid
+            // OPFS-level deadlock (only one SyncAccessHandle per file allowed).
             handle.close();
         }
     });

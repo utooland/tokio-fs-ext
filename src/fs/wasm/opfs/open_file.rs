@@ -44,9 +44,7 @@ pub(crate) async fn open_file(
     };
 
     if truncate {
-        sync_access_handle
-            .truncate_with_u32(0)
-            .map_err(opfs_err)?;
+        sync_access_handle.truncate_with_u32(0).map_err(opfs_err)?;
         sync_access_handle.flush().map_err(opfs_err)?;
         // On error the `_lock` guard is dropped, which decrements
         // ref_count and closes the cached handle when it reaches 0.
@@ -102,12 +100,7 @@ async fn resolve_parent(path: &Path) -> io::Result<(FileSystemDirectoryHandle, S
     }?;
 
     let dir_entry = match parent {
-        Some(parent_path) => open_dir(parent_path, OpenDirType::NotCreate)
-            .await
-            .inspect_err(|_| {
-                #[cfg(feature = "opfs_tracing")]
-                tracing::error!(path = %parent_path.display(), "Failed to open parent directory");
-            })?,
+        Some(parent_path) => open_dir(parent_path, OpenDirType::NotCreate).await?,
         None => root().await?,
     };
     Ok((dir_entry, name))
