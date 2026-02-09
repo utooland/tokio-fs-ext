@@ -84,14 +84,14 @@ impl Drop for FileLockGuard {
                 }
                 state.handle_mode = None;
 
-                if state.waiters.is_empty() {
-                    locks.remove(&self.path);
-                } else {
-                    // Wake all waiters. They will compete for the next lock.
-                    let wakers: Vec<Waker> = state.waiters.drain(..).map(|w| w.waker).collect();
-                    for w in wakers {
-                        w.wake();
-                    }
+                // Wake all waiters. They will compete for the next lock.
+                let wakers: Vec<Waker> = state.waiters.drain(..).map(|w| w.waker).collect();
+
+                // Remove the entry as it is now empty.
+                locks.remove(&self.path);
+
+                for w in wakers {
+                    w.wake();
                 }
             }
         });
@@ -139,7 +139,11 @@ impl Future for FileLockFuture {
 
         LOCKS.with(|locks| {
             let mut locks = locks.borrow_mut();
-            let state = locks.entry(this.path.clone()).or_default();
+            let state = if let Some(state) = locks.get_mut(&this.path) {
+                state
+            } else {
+                locks.entry(this.path.clone()).or_default()
+            };
 
             let can_acquire = match this.mode {
                 None => state.shared_count == 0 && !state.has_exclusive, // Exclusive
@@ -172,7 +176,7 @@ impl Future for FileLockFuture {
                     }
                 }
 
-                state.waiters.retain(|w| w.id != this.id);
+                state.waiters.pop_front();
                 this.registered = false;
 
                 Poll::Ready((
@@ -222,10 +226,9 @@ pub fn lock_file(path: impl AsRef<Path>, mode: Option<SyncAccessMode>) -> FileLo
 /// Store a newly created `SyncAccessHandle` in the cache and wake all
 /// waiters so they can share it.
 pub(crate) fn set_lock_handle(path: impl AsRef<Path>, handle: FileSystemSyncAccessHandle) {
-    let path = path.as_ref();
     LOCKS.with(|locks| {
         let mut locks = locks.borrow_mut();
-        if let Some(state) = locks.get_mut(path) {
+        if let Some(state) = locks.get_mut(path.as_ref()) {
             state.handle = Some(handle);
             // Wake ALL waiters — they can all share the handle now.
             let wakers: Vec<Waker> = state.waiters.drain(..).map(|w| w.waker).collect();

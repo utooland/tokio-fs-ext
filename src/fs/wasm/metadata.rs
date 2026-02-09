@@ -95,9 +95,7 @@ impl Metadata {
 }
 
 pub async fn metadata(path: impl AsRef<Path>) -> io::Result<Metadata> {
-    let path = path.as_ref();
-
-    match resolve_file_handle(path, super::opfs::CreateFileMode::NotCreate).await {
+    match resolve_file_handle(&path, super::opfs::CreateFileMode::NotCreate).await {
         Ok(handle) => {
             let file_val = wasm_bindgen_futures::JsFuture::from(handle.get_file())
                 .await

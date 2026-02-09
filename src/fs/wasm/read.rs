@@ -8,10 +8,9 @@ use web_sys::File;
 use super::opfs::{CreateFileMode, opfs_err};
 
 pub async fn read(path: impl AsRef<Path>) -> io::Result<Vec<u8>> {
-    let path = path.as_ref();
     // Use Shared lock to allow concurrent reads and wait for exclusive writers.
     let (guard, _sync_handle, file_handle) = super::opfs::lock_and_handle(
-        path,
+        &path,
         Some(super::opfs::SyncAccessMode::Readonly),
         CreateFileMode::NotCreate,
     )

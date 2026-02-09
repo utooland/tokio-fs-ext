@@ -10,8 +10,7 @@ use super::{
 
 #[cfg_attr(feature = "opfs_tracing", tracing::instrument(level = "trace", fields(path = %path.as_ref().to_string_lossy())))]
 pub(crate) async fn remove(path: impl AsRef<Path>, recursive: bool) -> io::Result<()> {
-    let path = path.as_ref();
-    let virt = virtualize::virtualize(path)?;
+    let virt = virtualize::virtualize(&path)?;
 
     let parent = virt.parent();
 

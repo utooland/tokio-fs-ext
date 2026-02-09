@@ -58,9 +58,20 @@ pub(crate) async fn lock_and_handle(
     Option<FileSystemSyncAccessHandle>,
     FileSystemFileHandle,
 )> {
-    let (lock, sync_handle) = lock_file(&path, mode).await;
-    let file_handle = resolve_file_handle(&path, create).await?;
-    Ok((lock, sync_handle, file_handle))
+    if matches!(create, CreateFileMode::CreateNew) {
+        // Safety: `CreateNew` relies on a check-then-act sequence in `resolve_file_handle`.
+        // We must hold the lock *before* checking existence to ensure atomicity within the app.
+        let (lock, sync_handle) = lock_file(&path, mode).await;
+        // Check-then-act sequence happens here, protected by the lock
+        let file_handle = resolve_file_handle(&path, create).await?;
+        Ok((lock, sync_handle, file_handle))
+    } else {
+        // optimistically race for performance in `Open` (NotCreate) and `Create` (Overwrite/Open)
+        let ((lock, sync_handle), file_handle_res) =
+            futures::join!(lock_file(&path, mode), resolve_file_handle(&path, create));
+        let file_handle = file_handle_res?;
+        Ok((lock, sync_handle, file_handle))
+    }
 }
 
 pub(crate) async fn get_file_and_lock(

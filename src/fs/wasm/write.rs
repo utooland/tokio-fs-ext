@@ -8,7 +8,6 @@ use web_sys::{FileSystemReadWriteOptions, FileSystemWritableFileStream};
 use super::opfs::{CreateFileMode, opfs_err};
 
 pub async fn write(path: impl AsRef<Path>, content: impl AsRef<[u8]>) -> io::Result<()> {
-    let path = path.as_ref();
     let (guard, sync_handle, file_handle) = super::opfs::lock_and_handle(
         path,
         Some(super::opfs::SyncAccessMode::Readwrite),

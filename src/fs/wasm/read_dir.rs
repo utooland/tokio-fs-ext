@@ -19,8 +19,7 @@ use super::{
 };
 
 pub async fn read_dir(path: impl AsRef<Path>) -> io::Result<ReadDir> {
-    let path = path.as_ref();
-    let dir_handle = open_dir(path, super::opfs::OpenDirType::NotCreate).await?;
+    let dir_handle = open_dir(&path, super::opfs::OpenDirType::NotCreate).await?;
     let entries = JsStream::from(dir_handle.entries())
         .map(|handle| {
             handle.map_or_else(
@@ -37,7 +36,7 @@ pub async fn read_dir(path: impl AsRef<Path>) -> io::Result<ReadDir> {
                         )
                         .map_err(|_| io::Error::from(io::ErrorKind::InvalidFilename))?;
 
-                        let path = path.join(&name);
+                        let path = path.as_ref().join(&name);
 
                         let file_type = js_array
                             .get(1)
