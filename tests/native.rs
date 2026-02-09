@@ -10,7 +10,7 @@ use futures::{
 };
 use tokio_fs_ext::*;
 
-use test_utils::run_test;
+use test_utils::{CWD_LOCK, run_test};
 
 static CWD: LazyLock<PathBuf> = LazyLock::new(|| std::env::current_dir().unwrap());
 
@@ -507,6 +507,9 @@ async fn test_async_seek() {
 #[tokio::test]
 async fn test_current_dir() {
     run_test("current_dir", |base_path| async move {
+        // Acquire global lock to prevent interference with other tests
+        let _guard = CWD_LOCK.lock().await;
+
         let deep_dir = base_path.join("deep/deep");
         let file_path = PathBuf::from("deep/data.txt"); // relative
         let content = b"hello world";
@@ -530,6 +533,9 @@ async fn test_current_dir() {
 #[tokio::test]
 async fn test_cwd_auto_creation() {
     run_test("cwd_auto_creation", |base_path| async move {
+        // Acquire global lock
+        let _guard = CWD_LOCK.lock().await;
+
         let deep = base_path.join("very/deep/path");
 
         create_dir_all(&deep).await.unwrap();
