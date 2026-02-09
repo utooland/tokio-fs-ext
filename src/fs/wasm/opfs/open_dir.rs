@@ -8,6 +8,8 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{FileSystemDirectoryHandle, FileSystemGetDirectoryOptions};
 
+use crate::fs::wasm::current_dir::current_dir;
+
 use super::{
     dir_handle_cache::{get_cached_dir_handle, set_cached_dir_handle},
     opfs_err,
@@ -49,7 +51,14 @@ pub(crate) async fn open_dir(
             let create = match r#type {
                 OpenDirType::Create => is_last,
                 OpenDirType::CreateRecursive => true,
-                _ => false,
+                _ => {
+                    // CWD needs to be checked when performing fs operations under cwd
+                    if let Ok(cwd) = current_dir() {
+                        cwd.starts_with(&cur_virt)
+                    } else {
+                        false
+                    }
+                }
             };
 
             let dir_handle = get_dir_handle(&dir_handle, c, create).await?;

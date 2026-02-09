@@ -717,3 +717,31 @@ async fn test_watch_rename_event() {
 
     let _ = remove_dir_all(base_path).await;
 }
+
+#[wasm_bindgen_test]
+async fn test_cwd_auto_creation() {
+    let base = "/test_cwd_auto_creation";
+    let deep = "/test_cwd_auto_creation/very/deep/path";
+    let _ = remove_dir_all(base).await;
+
+    // Set CWD to a deep, non-existent path
+    set_current_dir(deep).unwrap();
+
+    // Verify CWD is set
+    assert_eq!(current_dir().unwrap(), PathBuf::from(deep));
+
+    // Create a file in the current directory (which doesn't exist yet on disk)
+    // This should trigger the auto-creation logic in open_dir because
+    // resolve_file_handle calls resolve_parent, which calls open_dir.
+    // open_dir traverses from root to CWD and should create missing components
+    // because they are part of the CWD prefix.
+    File::create("test.txt").await.unwrap();
+
+    // Verify the directories were created
+    assert!(try_exists(deep).await.unwrap());
+    assert!(try_exists(format!("{}/test.txt", deep)).await.unwrap());
+
+    let _ = remove_dir_all(base).await;
+    // Reset CWD to root just in case
+    set_current_dir("/").unwrap();
+}
