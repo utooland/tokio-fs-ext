@@ -1,6 +1,6 @@
 [package]
 name = "tokio-fs-ext"
-version = "0.7.5"
+version = "0.7.6"
 edition = "2024"
 authors = ["xusd320"]
 description = "Extend tokio fs to be compatible with native and wasm"
@@ -53,6 +53,7 @@ web-sys = { version = "0.3.85", features = [
   "File",
   "Blob",
   "console",
+  "Window",
 ] }
 wasm-bindgen = { version = "0.2.108", default-features = false }
 wasm-bindgen-futures = { version = "0.4.58", features = [

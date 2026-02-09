@@ -38,11 +38,15 @@ thread_local! {
 
 #[derive(Default)]
 struct LockState {
-    /// Cached SyncAccessHandle (always opened in Readwrite mode).
+    /// Cached SyncAccessHandle.
     handle: Option<FileSystemSyncAccessHandle>,
-    /// Number of active `File` objects sharing this handle.
-    ref_count: usize,
-    /// Tasks waiting for the handle to become available.
+    /// The mode the current handle was opened with.
+    handle_mode: Option<SyncAccessMode>,
+    /// Number of active `Shared` lock holders.
+    shared_count: usize,
+    /// Whether an `Exclusive` lock is held.
+    has_exclusive: bool,
+    /// Tasks waiting for the lock.
     waiters: VecDeque<Waiter>,
 }
 
@@ -56,6 +60,8 @@ struct Waiter {
 #[derive(Debug)]
 pub struct FileLockGuard {
     pub(super) path: PathBuf,
+    /// None = Exclusive Lock, Some(mode) = Shared Lock with that mode.
+    pub(super) mode: Option<SyncAccessMode>,
 }
 
 impl Drop for FileLockGuard {
@@ -66,19 +72,22 @@ impl Drop for FileLockGuard {
                 return;
             };
 
-            state.ref_count -= 1;
+            match self.mode {
+                Some(_) => state.shared_count -= 1,
+                None => state.has_exclusive = false,
+            }
 
-            if state.ref_count == 0 {
-                // Last user — close the cached handle.
+            if state.shared_count == 0 && !state.has_exclusive {
+                // No more users — close the cached handle and reset mode.
                 if let Some(h) = state.handle.take() {
                     h.close();
                 }
+                state.handle_mode = None;
 
                 if state.waiters.is_empty() {
                     locks.remove(&self.path);
                 } else {
-                    // Wake all waiters. The first one to poll becomes the new
-                    // handle creator; the rest will wait for `set_lock_handle`.
+                    // Wake all waiters. They will compete for the next lock.
                     let wakers: Vec<Waker> = state.waiters.drain(..).map(|w| w.waker).collect();
                     for w in wakers {
                         w.wake();
@@ -94,6 +103,7 @@ impl Drop for FileLockGuard {
 pub struct FileLockFuture {
     path: PathBuf,
     id: u64,
+    mode: Option<SyncAccessMode>,
     /// Whether this future has inserted itself into the waiter queue.
     registered: bool,
 }
@@ -110,7 +120,11 @@ impl Drop for FileLockFuture {
                 return;
             };
             state.waiters.retain(|w| w.id != self.id);
-            if state.ref_count == 0 && state.waiters.is_empty() && state.handle.is_none() {
+            if state.shared_count == 0
+                && !state.has_exclusive
+                && state.waiters.is_empty()
+                && state.handle.is_none()
+            {
                 locks.remove(&self.path);
             }
         });
@@ -127,39 +141,48 @@ impl Future for FileLockFuture {
             let mut locks = locks.borrow_mut();
             let state = locks.entry(this.path.clone()).or_default();
 
-            if state.ref_count == 0 {
-                // First opener — become the handle creator.
-                state.ref_count = 1;
+            let can_acquire = match this.mode {
+                None => state.shared_count == 0 && !state.has_exclusive, // Exclusive
+                Some(req_mode) => {
+                    if state.has_exclusive {
+                        false
+                    } else if state.shared_count > 0 {
+                        // Compatibility check
+                        !matches!(
+                            (state.handle_mode, req_mode),
+                            (Some(SyncAccessMode::Readonly), SyncAccessMode::Readwrite)
+                        )
+                    } else {
+                        true
+                    }
+                }
+            };
+
+            // If we are at the front of the queue OR not in the queue and can acquire
+            let is_front = state.waiters.front().is_none_or(|w| w.id == this.id);
+
+            if can_acquire && is_front {
+                match this.mode {
+                    None => state.has_exclusive = true,
+                    Some(req_mode) => {
+                        state.shared_count += 1;
+                        if state.handle_mode.is_none() {
+                            state.handle_mode = Some(req_mode);
+                        }
+                    }
+                }
+
                 state.waiters.retain(|w| w.id != this.id);
                 this.registered = false;
 
                 Poll::Ready((
                     FileLockGuard {
                         path: this.path.clone(),
+                        mode: this.mode,
                     },
-                    None,
-                ))
-            } else if let Some(handle) = &state.handle {
-                // Handle exists — share it.
-                let h = handle.clone();
-                state.ref_count += 1;
-                state.waiters.retain(|w| w.id != this.id);
-                this.registered = false;
-
-                Poll::Ready((
-                    FileLockGuard {
-                        path: this.path.clone(),
-                    },
-                    Some(h),
+                    state.handle.as_ref().cloned(),
                 ))
             } else {
-                // Handle is being created by another opener — wait.
-                //
-                // Deadlock risk: if the creator task is itself awaiting
-                // `lock_file` for the same path (re-entrant lock), neither
-                // side can make progress.  We cannot detect true re-entrancy
-                // from here, but a growing waiter queue with no handle is a
-                // strong signal.
                 if let Some(w) = state.waiters.iter_mut().find(|w| w.id == this.id) {
                     w.waker = cx.waker().clone();
                 } else {
@@ -177,10 +200,10 @@ impl Future for FileLockFuture {
 
 // -- Public API -------------------------------------------------------------
 
-/// Acquire a shared file lock. Returns a guard and optionally the cached
-/// `SyncAccessHandle`. When `None` is returned, the caller must create a
-/// new handle and register it via [`set_lock_handle`].
-pub fn lock_file(path: impl AsRef<Path>) -> FileLockFuture {
+/// Acquire a file lock. Returns a guard and optionally the cached `SyncAccessHandle`.
+/// - `Some(mode)`: Shared lock with the specified access mode.
+/// - `None`: Exclusive lock, blocks all other RO/RW locks.
+pub fn lock_file(path: impl AsRef<Path>, mode: Option<SyncAccessMode>) -> FileLockFuture {
     let id = NEXT_ID.with(|next_id| {
         let mut id = next_id.borrow_mut();
         let current = *id;
@@ -191,6 +214,7 @@ pub fn lock_file(path: impl AsRef<Path>) -> FileLockFuture {
     FileLockFuture {
         path: path.as_ref().to_path_buf(),
         id,
+        mode,
         registered: false,
     }
 }
@@ -390,28 +414,43 @@ impl File {
 impl AsyncRead for File {
     fn poll_read(
         mut self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
+        cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<io::Result<usize>> {
-        let offset = self.read_to_buf(buf)?;
+        const CHUNK_SIZE: usize = 1024 * 1024;
+        let n = std::cmp::min(buf.len(), CHUNK_SIZE);
 
+        let offset = self.read_to_buf(&mut buf[..n])?;
         self.pos = Some(self.pos.unwrap_or_default() + offset);
 
-        Poll::Ready(Ok(offset as usize))
+        if offset as usize == n && buf.len() > CHUNK_SIZE {
+            // There is more to read, yield to stay responsive.
+            cx.waker().wake_by_ref();
+            Poll::Pending
+        } else {
+            Poll::Ready(Ok(offset as usize))
+        }
     }
 }
 
 impl AsyncWrite for File {
     fn poll_write(
         mut self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
+        cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<Result<usize, io::Error>> {
-        let offset = self.write_with_buf(buf)?;
+        const CHUNK_SIZE: usize = 1024 * 1024;
+        let n = std::cmp::min(buf.len(), CHUNK_SIZE);
 
+        let offset = self.write_with_buf(&buf[..n])?;
         self.pos = Some(self.pos.unwrap_or_default() + offset);
 
-        Poll::Ready(Ok(offset as usize))
+        if offset as usize == n && buf.len() > CHUNK_SIZE {
+            cx.waker().wake_by_ref();
+            Poll::Pending
+        } else {
+            Poll::Ready(Ok(offset as usize))
+        }
     }
 
     fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {

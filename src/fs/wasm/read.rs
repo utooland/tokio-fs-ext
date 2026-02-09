@@ -1,15 +1,34 @@
 use std::{io, path::Path};
 
-use super::OpenOptions;
+use js_sys::Uint8Array;
+use wasm_bindgen::JsCast;
+use wasm_bindgen_futures::JsFuture;
+use web_sys::File;
+
+use super::opfs::{CreateFileMode, opfs_err};
 
 pub async fn read(path: impl AsRef<Path>) -> io::Result<Vec<u8>> {
-    let mut file = OpenOptions::new().read(true).open(path).await?;
+    let path = path.as_ref();
+    // Use Shared lock to allow concurrent reads and wait for exclusive writers.
+    let (guard, _sync_handle, file_handle) = super::opfs::lock_and_handle(
+        path,
+        Some(super::opfs::SyncAccessMode::Readonly),
+        CreateFileMode::NotCreate,
+    )
+    .await?;
 
-    let file_size = file.size()?;
+    let file: File = JsFuture::from(file_handle.get_file())
+        .await
+        .map_err(opfs_err)?
+        .unchecked_into();
 
-    let mut buf = vec![0; file_size as usize];
+    let array_buffer = JsFuture::from(file.array_buffer())
+        .await
+        .map_err(opfs_err)?;
 
-    file.read_to_buf(&mut buf)?;
+    let uint8_array = Uint8Array::new(&array_buffer);
+    let vec = uint8_array.to_vec();
 
-    Ok(buf)
+    drop(guard);
+    Ok(vec)
 }

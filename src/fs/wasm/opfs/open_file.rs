@@ -30,7 +30,7 @@ pub(crate) async fn open_file(
     mode: SyncAccessMode,
     truncate: bool,
 ) -> io::Result<File> {
-    let (handle, _lock, sync_access_handle) = get_file_and_lock(&path, create).await?;
+    let (handle, _lock, sync_access_handle) = get_file_and_lock(&path, create, mode).await?;
 
     if truncate {
         sync_access_handle.truncate_with_u32(0).map_err(opfs_err)?;
@@ -49,27 +49,41 @@ pub(crate) async fn open_file(
     })
 }
 
+pub(crate) async fn lock_and_handle(
+    path: impl AsRef<Path>,
+    mode: Option<SyncAccessMode>,
+    create: CreateFileMode,
+) -> io::Result<(
+    FileLockGuard,
+    Option<FileSystemSyncAccessHandle>,
+    FileSystemFileHandle,
+)> {
+    let (lock, sync_handle) = lock_file(&path, mode).await;
+    let file_handle = resolve_file_handle(&path, create).await?;
+    Ok((lock, sync_handle, file_handle))
+}
+
 pub(crate) async fn get_file_and_lock(
     path: impl AsRef<Path>,
     create: CreateFileMode,
+    access_mode: SyncAccessMode,
 ) -> io::Result<(
     FileSystemFileHandle,
     FileLockGuard,
     FileSystemSyncAccessHandle,
 )> {
-    let (lock, cached_handle) = lock_file(&path).await;
-    let handle = resolve_file_handle(&path, create).await?;
+    let (lock, sync_handle, file_handle) =
+        lock_and_handle(&path, Some(access_mode), create).await?;
 
-    let sync_handle = if let Some(h) = cached_handle {
+    let sync_access_handle = if let Some(h) = sync_handle {
         h
     } else {
-        // Always create in Readwrite mode. See SyncAccessMode for details.
-        let h = create_sync_access_handle(&handle).await?;
+        let h = create_sync_access_handle(&file_handle, access_mode).await?;
         set_lock_handle(&path, h.clone());
         h
     };
 
-    Ok((handle, lock, sync_handle))
+    Ok((file_handle, lock, sync_access_handle))
 }
 
 pub(crate) async fn resolve_file_handle(
@@ -119,6 +133,7 @@ async fn get_raw_handle(
 
 async fn create_sync_access_handle(
     handle: &FileSystemFileHandle,
+    mode: SyncAccessMode,
 ) -> io::Result<FileSystemSyncAccessHandle> {
     let file_handle_js_value = JsValue::from(handle);
 
@@ -127,7 +142,7 @@ async fn create_sync_access_handle(
         .unchecked_into::<Function>()
         .call1(
             &file_handle_js_value,
-            &CreateSyncAccessHandleOptions::from(SyncAccessMode::Readwrite).into(),
+            &CreateSyncAccessHandleOptions::from(mode).into(),
         )
         .map_err(opfs_err)?
         .unchecked_into::<Promise>();

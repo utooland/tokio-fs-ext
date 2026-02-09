@@ -11,7 +11,7 @@ pub mod watch;
 
 pub(super) use error::opfs_err;
 pub(super) use open_dir::open_dir;
-pub(super) use open_file::{open_file, resolve_file_handle};
+pub(super) use open_file::{lock_and_handle, open_file, resolve_file_handle};
 pub(super) use options::{CreateFileMode, OpenDirType, SyncAccessMode};
 pub(super) use remove::remove;
 pub(super) use virtualize::virtualize;
