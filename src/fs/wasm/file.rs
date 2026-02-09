@@ -316,8 +316,8 @@ impl File {
 
         const MAX_SAFE_INT: u64 = js_sys::Number::MAX_SAFE_INTEGER as _;
         if size > MAX_SAFE_INT {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
                 format!("requested size {size} too large, max allowed is {MAX_SAFE_INT}"),
             ));
         }

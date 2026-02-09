@@ -29,12 +29,23 @@ impl From<OpfsError> for io::Error {
                 // NoModificationAllowedError: file is locked by another SyncAccessHandle
                 // Use WouldBlock to indicate the resource is temporarily unavailable
                 "NoModificationAllowedError" => io::Error::from(io::ErrorKind::WouldBlock),
-                "TypeMismatchError" => io::Error::other("type mismatch"),
+                "TypeMismatchError" => io::Error::new(io::ErrorKind::InvalidData, "type mismatch"),
                 // QuotaExceededError: storage quota exceeded
                 "QuotaExceededError" => io::Error::from(io::ErrorKind::StorageFull),
+                "InvalidStateError" => io::Error::new(io::ErrorKind::InvalidInput, "invalid state"),
+                "SecurityError" => io::Error::from(io::ErrorKind::PermissionDenied),
+                "AbortError" => io::Error::new(io::ErrorKind::Interrupted, "operation aborted"),
                 msg => io::Error::other(msg),
             },
-            None => io::Error::other(format!("{}", Object::from(opfs_err.js_err).to_string())),
+            None => {
+                let msg = match js_sys::Reflect::get(&opfs_err.js_err, &"message".into()) {
+                    Ok(m) => m.as_string().unwrap_or_else(|| {
+                        Object::from(opfs_err.js_err.clone()).to_string().into()
+                    }),
+                    Err(_) => Object::from(opfs_err.js_err.clone()).to_string().into(),
+                };
+                io::Error::other(msg)
+            }
         }
     }
 }

@@ -30,17 +30,7 @@ pub(crate) async fn open_file(
     mode: SyncAccessMode,
     truncate: bool,
 ) -> io::Result<File> {
-    let (handle, _lock, cached_sync_handle) = get_fs_handle(&path, create).await?;
-
-    let sync_access_handle = if let Some(h) = cached_sync_handle {
-        h
-    } else {
-        // Always create in Readwrite mode so the handle can be shared with
-        // both readers and writers, matching OS filesystem semantics.
-        let h = create_sync_access_handle(&handle, SyncAccessMode::Readwrite).await?;
-        set_lock_handle(&path, h.clone());
-        h
-    };
+    let (handle, _lock, sync_access_handle) = get_file_and_lock(&path, create).await?;
 
     if truncate {
         sync_access_handle.truncate_with_u32(0).map_err(opfs_err)?;
@@ -59,17 +49,27 @@ pub(crate) async fn open_file(
     })
 }
 
-pub(crate) async fn get_fs_handle(
+pub(crate) async fn get_file_and_lock(
     path: impl AsRef<Path>,
     create: CreateFileMode,
 ) -> io::Result<(
     FileSystemFileHandle,
     FileLockGuard,
-    Option<FileSystemSyncAccessHandle>,
+    FileSystemSyncAccessHandle,
 )> {
     let (lock, cached_handle) = lock_file(&path).await;
     let handle = resolve_file_handle(&path, create).await?;
-    Ok((handle, lock, cached_handle))
+
+    let sync_handle = if let Some(h) = cached_handle {
+        h
+    } else {
+        // Always create in Readwrite mode. See SyncAccessMode for details.
+        let h = create_sync_access_handle(&handle).await?;
+        set_lock_handle(&path, h.clone());
+        h
+    };
+
+    Ok((handle, lock, sync_handle))
 }
 
 pub(crate) async fn resolve_file_handle(
@@ -119,7 +119,6 @@ async fn get_raw_handle(
 
 async fn create_sync_access_handle(
     handle: &FileSystemFileHandle,
-    mode: SyncAccessMode,
 ) -> io::Result<FileSystemSyncAccessHandle> {
     let file_handle_js_value = JsValue::from(handle);
 
@@ -128,7 +127,7 @@ async fn create_sync_access_handle(
         .unchecked_into::<Function>()
         .call1(
             &file_handle_js_value,
-            &CreateSyncAccessHandleOptions::from(mode).into(),
+            &CreateSyncAccessHandleOptions::from(SyncAccessMode::Readwrite).into(),
         )
         .map_err(opfs_err)?
         .unchecked_into::<Promise>();
