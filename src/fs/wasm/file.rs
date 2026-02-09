@@ -197,7 +197,8 @@ pub fn lock_file(path: impl AsRef<Path>) -> FileLockFuture {
 
 /// Store a newly created `SyncAccessHandle` in the cache and wake all
 /// waiters so they can share it.
-pub(crate) fn set_lock_handle(path: &Path, handle: FileSystemSyncAccessHandle) {
+pub(crate) fn set_lock_handle(path: impl AsRef<Path>, handle: FileSystemSyncAccessHandle) {
+    let path = path.as_ref();
     LOCKS.with(|locks| {
         let mut locks = locks.borrow_mut();
         if let Some(state) = locks.get_mut(path) {

@@ -30,8 +30,7 @@ pub(crate) async fn open_file(
     mode: SyncAccessMode,
     truncate: bool,
 ) -> io::Result<File> {
-    let path = path.as_ref();
-    let (handle, _lock, cached_sync_handle) = get_fs_handle(path, create).await?;
+    let (handle, _lock, cached_sync_handle) = get_fs_handle(&path, create).await?;
 
     let sync_access_handle = if let Some(h) = cached_sync_handle {
         h
@@ -39,7 +38,7 @@ pub(crate) async fn open_file(
         // Always create in Readwrite mode so the handle can be shared with
         // both readers and writers, matching OS filesystem semantics.
         let h = create_sync_access_handle(&handle, SyncAccessMode::Readwrite).await?;
-        set_lock_handle(path, h.clone());
+        set_lock_handle(&path, h.clone());
         h
     };
 
@@ -68,9 +67,8 @@ pub(crate) async fn get_fs_handle(
     FileLockGuard,
     Option<FileSystemSyncAccessHandle>,
 )> {
-    let path = path.as_ref();
-    let (lock, cached_handle) = lock_file(path).await;
-    let handle = resolve_file_handle(path, create).await?;
+    let (lock, cached_handle) = lock_file(&path).await;
+    let handle = resolve_file_handle(&path, create).await?;
     Ok((handle, lock, cached_handle))
 }
 
@@ -78,7 +76,7 @@ pub(crate) async fn resolve_file_handle(
     path: impl AsRef<Path>,
     create: CreateFileMode,
 ) -> io::Result<FileSystemFileHandle> {
-    let (dir_entry, name) = resolve_parent(path.as_ref()).await?;
+    let (dir_entry, name) = resolve_parent(path).await?;
 
     match create {
         CreateFileMode::Create => get_raw_handle(&name, &dir_entry, true).await,
@@ -90,7 +88,7 @@ pub(crate) async fn resolve_file_handle(
     }
 }
 
-async fn resolve_parent(path: &Path) -> io::Result<(FileSystemDirectoryHandle, String)> {
+async fn resolve_parent(path: impl AsRef<Path>) -> io::Result<(FileSystemDirectoryHandle, String)> {
     let virt = virtualize::virtualize(path)?;
     let parent = virt.parent();
 
