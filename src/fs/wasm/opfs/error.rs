@@ -24,18 +24,20 @@ impl From<OpfsError> for io::Error {
     fn from(opfs_err: OpfsError) -> Self {
         match opfs_err.js_err.dyn_ref::<DomException>() {
             Some(e) => match e.name().as_str() {
-                "NotFoundError" => io::Error::from(io::ErrorKind::NotFound),
-                "NotAllowedError" => io::Error::from(io::ErrorKind::PermissionDenied),
+                "NotFoundError" => io::Error::new(io::ErrorKind::NotFound, e.message()),
+                "NotAllowedError" => io::Error::new(io::ErrorKind::PermissionDenied, e.message()),
                 // NoModificationAllowedError: file is locked by another SyncAccessHandle
                 // Use WouldBlock to indicate the resource is temporarily unavailable
-                "NoModificationAllowedError" => io::Error::from(io::ErrorKind::WouldBlock),
-                "TypeMismatchError" => io::Error::new(io::ErrorKind::InvalidData, "type mismatch"),
+                "NoModificationAllowedError" => {
+                    io::Error::new(io::ErrorKind::WouldBlock, e.message())
+                }
+                "TypeMismatchError" => io::Error::new(io::ErrorKind::InvalidData, e.message()),
                 // QuotaExceededError: storage quota exceeded
-                "QuotaExceededError" => io::Error::from(io::ErrorKind::StorageFull),
-                "InvalidStateError" => io::Error::new(io::ErrorKind::InvalidInput, "invalid state"),
-                "SecurityError" => io::Error::from(io::ErrorKind::PermissionDenied),
-                "AbortError" => io::Error::new(io::ErrorKind::Interrupted, "operation aborted"),
-                msg => io::Error::other(msg),
+                "QuotaExceededError" => io::Error::new(io::ErrorKind::StorageFull, e.message()),
+                "InvalidStateError" => io::Error::new(io::ErrorKind::InvalidInput, e.message()),
+                "SecurityError" => io::Error::new(io::ErrorKind::PermissionDenied, e.message()),
+                "AbortError" => io::Error::new(io::ErrorKind::Interrupted, e.message()),
+                _ => io::Error::other(format!("{}: {}", e.name(), e.message())),
             },
             None => {
                 let msg = match js_sys::Reflect::get(&opfs_err.js_err, &"message".into()) {
