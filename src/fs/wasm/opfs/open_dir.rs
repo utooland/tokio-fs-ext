@@ -11,7 +11,7 @@ use web_sys::{FileSystemDirectoryHandle, FileSystemGetDirectoryOptions};
 use crate::fs::wasm::current_dir::current_dir;
 
 use super::{
-    dir_handle_cache::{get_cached_dir_handle, set_cached_dir_handle},
+    dir_handle_cache::{get_cached_dir_handle, remove_cached_dir_handle, set_cached_dir_handle},
     opfs_err,
     options::OpenDirType,
     root::root,
@@ -29,6 +29,24 @@ pub(crate) async fn open_dir(
         return Ok(handle);
     }
 
+    match open_dir_inner(&virt, r#type).await {
+        Ok(handle) => Ok(handle),
+        Err(e) if e.kind() == io::ErrorKind::InvalidInput => {
+            // InvalidInput maps from OPFS InvalidStateError — a cached
+            // directory handle has gone stale.  Evict the entire subtree
+            // cache and retry once from a fresh root.
+            remove_cached_dir_handle(&PathBuf::from("/"), true);
+            super::root::clear_cached_root();
+            open_dir_inner(&virt, r#type).await
+        }
+        Err(e) => Err(e),
+    }
+}
+
+async fn open_dir_inner(
+    virt: &Path,
+    r#type: OpenDirType,
+) -> io::Result<FileSystemDirectoryHandle> {
     let components: Vec<Cow<'_, str>> = virt
         .components()
         .filter_map(|c| match c {
