@@ -28,3 +28,8 @@ pub(super) async fn root() -> io::Result<FileSystemDirectoryHandle> {
         Some(root) => Ok(root.clone()),
     }
 }
+
+pub(super) fn clear_cached_root() {
+    CACHED_ROOT.with(|cell| cell.take());
+}
+
